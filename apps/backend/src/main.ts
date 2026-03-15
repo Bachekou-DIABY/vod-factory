@@ -6,6 +6,10 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
+import * as dotenv from 'dotenv';
+
+// Charger les variables d'environnement
+dotenv.config({ path: '.env' });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
