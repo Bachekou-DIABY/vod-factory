@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tournament {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  startAt   DateTime
+  endAt     DateTime
+  startGGId String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sets Set[]
+
+  @@map("tournaments")
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  name      String
+  tag       String?
+  startGGId String?  @unique
+  country   String?
+  region    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  player1Sets Set[] @relation("Player1Sets")
+  player2Sets Set[] @relation("Player2Sets")
+
+  @@map("players")
+}
+
+model Set {
+  id           String    @id @default(cuid())
+  tournamentId String
+  roundName    String?
+  bestOf       Int       @default(3)
+  winnerId     String?
+  score        String? // Format: "2-1"
+  startGGId    String?   @unique
+  startTime    DateTime?
+  endTime      DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  player1    Player?    @relation("Player1Sets", fields: [player1Id], references: [id])
+  player1Id  String?
+  player2    Player?    @relation("Player2Sets", fields: [player2Id], references: [id])
+  player2Id  String?
+  vods       Vod[]
+
+  @@map("sets")
+}
+
+model Vod {
+  id           String    @id @default(cuid())
+  setId        String
+  sourceUrl    String // Original VOD URL (Twitch, YouTube, etc.)
+  processedUrl String? // Processed video URL
+  status       VodStatus @default(PENDING)
+  duration     Int? // Duration in seconds
+  fileSize     BigInt? // File size in bytes
+  resolution   String? // e.g., "1920x1080"
+  fps          Int? // Frames per second
+  startTime    Int? // Start time in seconds from original VOD
+  endTime      Int? // End time in seconds from original VOD
+  metadata     Json? // Additional metadata (stream info, etc.)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  set Set @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  @@map("vods")
+}
+
+enum VodStatus {
+  PENDING
+  DOWNLOADING
+  DOWNLOADED
+  PROCESSING
+  PROCESSED
+  FAILED
+  COMPLETED
+}
