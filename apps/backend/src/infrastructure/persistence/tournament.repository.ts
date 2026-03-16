@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { Tournament } from '../../domain/entities/tournament.entity';
 import { ITournamentRepository } from '../../domain/repositories/tournament.repository.interface';
+import { TournamentMapper } from './mappers/tournament.mapper';
 
 @Injectable()
 export class TournamentRepository implements ITournamentRepository {
@@ -11,28 +12,28 @@ export class TournamentRepository implements ITournamentRepository {
     const created = await this.prisma.tournament.create({
       data: tournament,
     });
-    return created as Tournament;
+    return TournamentMapper.toDomain(created);
   }
 
   async findById(id: string): Promise<Tournament | null> {
     const tournament = await this.prisma.tournament.findUnique({
       where: { id },
     });
-    return tournament as Tournament | null;
+    return tournament ? TournamentMapper.toDomain(tournament) : null;
   }
 
   async findBySlug(slug: string): Promise<Tournament | null> {
     const tournament = await this.prisma.tournament.findUnique({
       where: { slug },
     });
-    return tournament as Tournament | null;
+    return tournament ? TournamentMapper.toDomain(tournament) : null;
   }
 
   async findByStartGGId(startGGId: string): Promise<Tournament | null> {
     const tournament = await this.prisma.tournament.findUnique({
       where: { startGGId },
     });
-    return tournament as Tournament | null;
+    return tournament ? TournamentMapper.toDomain(tournament) : null;
   }
 
   async update(id: string, data: Partial<Tournament>): Promise<Tournament> {
@@ -40,7 +41,7 @@ export class TournamentRepository implements ITournamentRepository {
       where: { id },
       data,
     });
-    return updated as Tournament;
+    return TournamentMapper.toDomain(updated);
   }
 
   async delete(id: string): Promise<void> {
@@ -51,6 +52,6 @@ export class TournamentRepository implements ITournamentRepository {
 
   async findAll(): Promise<Tournament[]> {
     const tournaments = await this.prisma.tournament.findMany();
-    return tournaments as Tournament[];
+    return tournaments.map(TournamentMapper.toDomain);
   }
 }

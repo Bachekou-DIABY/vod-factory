@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { Player } from '../../domain/entities/player.entity';
 import { IPlayerRepository } from '../../domain/repositories/player.repository.interface';
+import { PlayerMapper } from './mappers/player.mapper';
 
 @Injectable()
 export class PlayerRepository implements IPlayerRepository {
@@ -11,28 +12,28 @@ export class PlayerRepository implements IPlayerRepository {
     const created = await this.prisma.player.create({
       data: player,
     });
-    return created as Player;
+    return PlayerMapper.toDomain(created);
   }
 
   async findById(id: string): Promise<Player | null> {
     const player = await this.prisma.player.findUnique({
       where: { id },
     });
-    return player as Player | null;
+    return player ? PlayerMapper.toDomain(player) : null;
   }
 
   async findByStartGGId(startGGId: string): Promise<Player | null> {
     const player = await this.prisma.player.findUnique({
       where: { startGGId },
     });
-    return player as Player | null;
+    return player ? PlayerMapper.toDomain(player) : null;
   }
 
   async findByTag(tag: string): Promise<Player | null> {
     const player = await this.prisma.player.findFirst({
       where: { tag },
     });
-    return player as Player | null;
+    return player ? PlayerMapper.toDomain(player) : null;
   }
 
   async update(id: string, data: Partial<Player>): Promise<Player> {
@@ -40,7 +41,7 @@ export class PlayerRepository implements IPlayerRepository {
       where: { id },
       data,
     });
-    return updated as Player;
+    return PlayerMapper.toDomain(updated);
   }
 
   async delete(id: string): Promise<void> {
@@ -51,13 +52,13 @@ export class PlayerRepository implements IPlayerRepository {
 
   async findAll(): Promise<Player[]> {
     const players = await this.prisma.player.findMany();
-    return players as Player[];
+    return players.map(PlayerMapper.toDomain);
   }
 
   async findByName(name: string): Promise<Player[]> {
     const players = await this.prisma.player.findMany({
       where: { name: { contains: name, mode: 'insensitive' } },
     });
-    return players as Player[];
+    return players.map(PlayerMapper.toDomain);
   }
 }

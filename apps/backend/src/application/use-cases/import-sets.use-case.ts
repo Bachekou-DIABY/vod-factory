@@ -52,7 +52,7 @@ export class ImportSetsUseCase {
           startGGId: externalSet.id,
           player1Id: p1.id,
           player2Id: p2.id,
-        } as any);
+        });
       }
     }
   }

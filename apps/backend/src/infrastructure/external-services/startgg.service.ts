@@ -6,6 +6,24 @@ import { print } from 'graphql';
 import { IStartGGService, StartGGSetResponse } from '../../domain/services/startgg.service.interface';
 import { Tournament } from '../../domain/entities/tournament.entity';
 
+interface StartGGEvent {
+  id: string;
+  name: string;
+}
+
+interface StartGGSetNode {
+  id: number | string;
+  fullRoundText: string;
+  winnerId: number | string | null;
+  displayScore: string;
+  slots: {
+    entrant: {
+      id: number | string;
+      name: string;
+    } | null;
+  }[];
+}
+
 @Injectable()
 export class StartGGService implements IStartGGService {
   private readonly logger = new Logger(StartGGService.name);
@@ -61,7 +79,6 @@ export class StartGGService implements IStartGGService {
   }
 
   async getSetsByTournamentId(startGGId: string): Promise<StartGGSetResponse[]> {
-    // Étape 1 : Récupérer uniquement les IDs des événements pour réduire la complexité
     const eventsQuery = gql`
       query GetTournamentEvents($id: ID!) {
         tournament(id: $id) {
@@ -80,19 +97,17 @@ export class StartGGService implements IStartGGService {
         { headers: { Authorization: `Bearer ${this.apiToken}` } }
       );
 
-      const events = eventsResponse.data?.data?.tournament?.events || [];
+      const events = (eventsResponse.data?.data?.tournament?.events || []) as StartGGEvent[];
       const allSets: StartGGSetResponse[] = [];
 
-      // Filtre pour ne prendre que les jeux populaires demandés
       const popularGamesKeywords = ['ultimate', 'melee', 'rivals', 'roa', 'street', 'tekken', 'guilty', 'sf6', 'strive'];
       
-      const filteredEvents = events.filter((e: any) => 
+      const filteredEvents = events.filter((e) => 
         popularGamesKeywords.some(keyword => e.name.toLowerCase().includes(keyword))
       );
 
       this.logger.log(`Fetching sets for ${filteredEvents.length} filtered events (out of ${events.length})...`);
 
-      // Étape 2 : Pour chaque événement filtré, récupérer ses sets
       for (const event of filteredEvents) {
         const sets = await this.getSetsByEventId(event.id);
         this.logger.log(`Fetched ${sets.length} sets for event: ${event.name}`);
@@ -135,22 +150,23 @@ export class StartGGService implements IStartGGService {
         { headers: { Authorization: `Bearer ${this.apiToken}` } }
       );
 
-      const sets = response.data?.data?.event?.sets?.nodes || [];
+      const sets = (response.data?.data?.event?.sets?.nodes || []) as StartGGSetNode[];
+      
       return sets
-        .filter((s: any) => s.slots && s.slots.length === 2 && s.slots[0].entrant && s.slots[1].entrant)
-        .map((s: any) => ({
+        .filter((s) => s.slots && s.slots.length === 2 && s.slots[0].entrant && s.slots[1].entrant)
+        .map((s) => ({
           id: s.id.toString(),
           roundName: s.fullRoundText,
           bestOf: 3,
           winnerId: s.winnerId?.toString(),
           score: s.displayScore,
           player1: {
-            id: s.slots[0].entrant.id.toString(),
-            name: s.slots[0].entrant.name,
+            id: s.slots[0].entrant!.id.toString(),
+            name: s.slots[0].entrant!.name,
           },
           player2: {
-            id: s.slots[1].entrant.id.toString(),
-            name: s.slots[1].entrant.name,
+            id: s.slots[1].entrant!.id.toString(),
+            name: s.slots[1].entrant!.name,
           },
         }));
     } catch (error) {

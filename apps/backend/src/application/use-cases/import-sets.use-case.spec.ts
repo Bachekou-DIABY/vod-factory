@@ -5,6 +5,9 @@ import { STARTGG_SERVICE_TOKEN, IStartGGService, StartGGSetResponse } from '../.
 import { ITournamentRepository } from '../../domain/repositories/tournament.repository.interface';
 import { IPlayerRepository } from '../../domain/repositories/player.repository.interface';
 import { ISetRepository } from '../../domain/repositories/set.repository.interface';
+import { Tournament } from '../../domain/entities/tournament.entity';
+import { Player } from '../../domain/entities/player.entity';
+import { Set } from '../../domain/entities/set.entity';
 
 describe('ImportSetsUseCase', () => {
   let useCase: ImportSetsUseCase;
@@ -47,7 +50,16 @@ describe('ImportSetsUseCase', () => {
 
   it('should import sets and players successfully', async () => {
     const tournamentId = 'internal-tourney-id';
-    const mockTournament = { id: tournamentId, startGGId: 'sg-tourney-123' } as any;
+    const mockTournament = { 
+      id: tournamentId, 
+      startGGId: 'sg-tourney-123',
+      name: 'Genesis 8',
+      slug: 'genesis-8',
+      startAt: new Date(),
+      endAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    } as Tournament;
 
     const mockSets: StartGGSetResponse[] = [
       {
@@ -66,11 +78,21 @@ describe('ImportSetsUseCase', () => {
     
     // Simuler que les joueurs n'existent pas encore
     playerRepo.findByStartGGId.mockResolvedValue(null);
-    playerRepo.create.mockImplementation((player: any) => Promise.resolve({ id: 'internal-' + player.startGGId, ...player }));
+    playerRepo.create.mockImplementation((playerData) => Promise.resolve({ 
+      id: 'internal-' + playerData.startGGId, 
+      ...playerData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    } as Player));
     
     // Simuler que le match n'existe pas encore
     setRepo.findByStartGGId.mockResolvedValue(null);
-    setRepo.create.mockResolvedValue({ id: 'internal-set-1' } as any);
+    setRepo.create.mockImplementation((setData) => Promise.resolve({ 
+      id: 'internal-set-1', 
+      ...setData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    } as Set));
 
     await useCase.execute(tournamentId);
 

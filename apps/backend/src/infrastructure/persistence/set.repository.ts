@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { Set } from '../../domain/entities/set.entity';
 import { ISetRepository } from '../../domain/repositories/set.repository.interface';
+import { SetMapper } from './mappers/set.mapper';
 
 @Injectable()
 export class SetRepository implements ISetRepository {
@@ -11,45 +12,29 @@ export class SetRepository implements ISetRepository {
     const created = await this.prisma.set.create({
       data: set,
     });
-    return created as Set;
+    return SetMapper.toDomain(created);
   }
 
   async findById(id: string): Promise<Set | null> {
     const set = await this.prisma.set.findUnique({
       where: { id },
-      include: {
-        tournament: true,
-        player1: true,
-        player2: true,
-        vods: true,
-      },
     });
-    return set as Set | null;
+    return set ? SetMapper.toDomain(set) : null;
   }
 
   async findByStartGGId(startGGId: string): Promise<Set | null> {
     const set = await this.prisma.set.findUnique({
       where: { startGGId },
-      include: {
-        tournament: true,
-        player1: true,
-        player2: true,
-      },
     });
-    return set as Set | null;
+    return set ? SetMapper.toDomain(set) : null;
   }
 
   async findByTournamentId(tournamentId: string): Promise<Set[]> {
     const sets = await this.prisma.set.findMany({
       where: { tournamentId },
-      include: {
-        player1: true,
-        player2: true,
-        vods: true,
-      },
       orderBy: { startTime: 'asc' },
     });
-    return sets as Set[];
+    return sets.map(SetMapper.toDomain);
   }
 
   async findByPlayerId(playerId: string): Promise<Set[]> {
@@ -57,14 +42,9 @@ export class SetRepository implements ISetRepository {
       where: {
         OR: [{ player1Id: playerId }, { player2Id: playerId }],
       },
-      include: {
-        tournament: true,
-        player1: true,
-        player2: true,
-      },
       orderBy: { startTime: 'desc' },
     });
-    return sets as Set[];
+    return sets.map(SetMapper.toDomain);
   }
 
   async update(id: string, data: Partial<Set>): Promise<Set> {
@@ -72,7 +52,7 @@ export class SetRepository implements ISetRepository {
       where: { id },
       data,
     });
-    return updated as Set;
+    return SetMapper.toDomain(updated);
   }
 
   async delete(id: string): Promise<void> {
@@ -83,13 +63,8 @@ export class SetRepository implements ISetRepository {
 
   async findAll(): Promise<Set[]> {
     const sets = await this.prisma.set.findMany({
-      include: {
-        tournament: true,
-        player1: true,
-        player2: true,
-      },
       orderBy: { createdAt: 'desc' },
     });
-    return sets as Set[];
+    return sets.map(SetMapper.toDomain);
   }
 }

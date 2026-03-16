@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { Vod, VodStatus } from '../../domain/entities/vod.entity';
 import { IVodRepository } from '../../domain/repositories/vod.repository.interface';
+import { VodMapper } from './mappers/vod.mapper';
+import { VodStatus as PrismaVodStatus } from '@prisma/client';
 
 @Injectable()
 export class VodRepository implements IVodRepository {
@@ -9,25 +11,19 @@ export class VodRepository implements IVodRepository {
 
   async create(vod: Omit<Vod, 'id' | 'createdAt' | 'updatedAt'>): Promise<Vod> {
     const created = await this.prisma.vod.create({
-      data: vod,
+      data: {
+        ...vod,
+        status: vod.status as unknown as PrismaVodStatus,
+      },
     });
-    return created as Vod;
+    return VodMapper.toDomain(created);
   }
 
   async findById(id: string): Promise<Vod | null> {
     const vod = await this.prisma.vod.findUnique({
       where: { id },
-      include: {
-        set: {
-          include: {
-            tournament: true,
-            player1: true,
-            player2: true,
-          },
-        },
-      },
     });
-    return vod as Vod | null;
+    return vod ? VodMapper.toDomain(vod) : null;
   }
 
   async findBySetId(setId: string): Promise<Vod[]> {
@@ -35,31 +31,34 @@ export class VodRepository implements IVodRepository {
       where: { setId },
       orderBy: { createdAt: 'asc' },
     });
-    return vods as Vod[];
+    return vods.map(VodMapper.toDomain);
   }
 
   async findByStatus(status: VodStatus): Promise<Vod[]> {
     const vods = await this.prisma.vod.findMany({
-      where: { status },
+      where: { status: status as unknown as PrismaVodStatus },
       orderBy: { createdAt: 'desc' },
     });
-    return vods as Vod[];
+    return vods.map(VodMapper.toDomain);
   }
 
   async update(id: string, data: Partial<Vod>): Promise<Vod> {
     const updated = await this.prisma.vod.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        status: data.status ? (data.status as unknown as PrismaVodStatus) : undefined,
+      },
     });
-    return updated as Vod;
+    return VodMapper.toDomain(updated);
   }
 
   async updateStatus(id: string, status: VodStatus): Promise<Vod> {
     const updated = await this.prisma.vod.update({
       where: { id },
-      data: { status },
+      data: { status: status as unknown as PrismaVodStatus },
     });
-    return updated as Vod;
+    return VodMapper.toDomain(updated);
   }
 
   async delete(id: string): Promise<void> {
@@ -70,27 +69,20 @@ export class VodRepository implements IVodRepository {
 
   async findAll(): Promise<Vod[]> {
     const vods = await this.prisma.vod.findMany({
-      include: {
-        set: {
-          include: {
-            tournament: true,
-          },
-        },
-      },
       orderBy: { createdAt: 'desc' },
     });
-    return vods as Vod[];
+    return vods.map(VodMapper.toDomain);
   }
 
   async findPendingProcessing(): Promise<Vod[]> {
     const vods = await this.prisma.vod.findMany({
       where: {
         status: {
-          in: [VodStatus.DOWNLOADED, VodStatus.PROCESSING],
+          in: [PrismaVodStatus.DOWNLOADED, PrismaVodStatus.PROCESSING],
         },
       },
       orderBy: { createdAt: 'asc' },
     });
-    return vods as Vod[];
+    return vods.map(VodMapper.toDomain);
   }
 }

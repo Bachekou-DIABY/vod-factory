@@ -27,6 +27,7 @@
 - [x] NestJS configuré avec Clean Architecture
 - [x] Séparation stricte : `domain/`, `application/`, `infrastructure/`
 - [x] **Inversion de Dépendance (DIP)** : Utilisation de tokens DI pour découpler les couches
+- [x] **Mappers de Données** : Isolation totale entre Prisma et le Domaine métier
 
 #### 3. Base de Données Prisma
 - [x] PostgreSQL via Docker
