@@ -40,48 +40,86 @@ export class StartGGService implements IStartGGService {
           variables: { slug },
         },
         {
-          headers: {
-            Authorization: `Bearer ${this.apiToken}`,
-          },
+          headers: { Authorization: `Bearer ${this.apiToken}` },
         }
       );
 
       const data = response.data?.data?.tournament;
-
-      if (!data) {
-        return null;
-      }
+      if (!data) return null;
 
       return {
         name: data.name,
         slug: data.slug,
-        startAt: new Date(data.startAt * 1000), // Start.gg renvoie des secondes, JS veut des ms
+        startAt: new Date(data.startAt * 1000),
         endAt: new Date(data.endAt * 1000),
         startGGId: data.id.toString(),
       };
     } catch (error) {
-      this.logger.error(`Error fetching tournament from Start.gg: ${error.message}`);
+      this.logger.error(`Error fetching tournament: ${error.message}`);
       throw new Error('Failed to fetch data from Start.gg');
     }
   }
 
-  async getSetsByTournamentId(tournamentId: string): Promise<StartGGSetResponse[]> {
-    const query = gql`
-      query GetTournamentSets($id: ID!) {
+  async getSetsByTournamentId(startGGId: string): Promise<StartGGSetResponse[]> {
+    // Étape 1 : Récupérer uniquement les IDs des événements pour réduire la complexité
+    const eventsQuery = gql`
+      query GetTournamentEvents($id: ID!) {
         tournament(id: $id) {
           events {
-            sets(page: 1, perPage: 100) {
-              nodes {
-                id
-                fullRoundText
-                bestOf
-                winnerId
-                displayScore
-                slots {
-                  entrant {
-                    id
-                    name
-                  }
+            id
+            name
+          }
+        }
+      }
+    `;
+
+    try {
+      const eventsResponse = await axios.post(
+        this.apiUrl,
+        { query: print(eventsQuery), variables: { id: startGGId } },
+        { headers: { Authorization: `Bearer ${this.apiToken}` } }
+      );
+
+      const events = eventsResponse.data?.data?.tournament?.events || [];
+      const allSets: StartGGSetResponse[] = [];
+
+      // Filtre pour ne prendre que les jeux populaires demandés
+      const popularGamesKeywords = ['ultimate', 'melee', 'rivals', 'roa', 'street', 'tekken', 'guilty', 'sf6', 'strive'];
+      
+      const filteredEvents = events.filter((e: any) => 
+        popularGamesKeywords.some(keyword => e.name.toLowerCase().includes(keyword))
+      );
+
+      this.logger.log(`Fetching sets for ${filteredEvents.length} filtered events (out of ${events.length})...`);
+
+      // Étape 2 : Pour chaque événement filtré, récupérer ses sets
+      for (const event of filteredEvents) {
+        const sets = await this.getSetsByEventId(event.id);
+        this.logger.log(`Fetched ${sets.length} sets for event: ${event.name}`);
+        allSets.push(...sets);
+      }
+
+      return allSets;
+    } catch (error) {
+      this.logger.error(`Error in getSetsByTournamentId: ${error.message}`);
+      return [];
+    }
+  }
+
+  private async getSetsByEventId(eventId: string): Promise<StartGGSetResponse[]> {
+    const query = gql`
+      query GetEventSets($eventId: ID!) {
+        event(id: $eventId) {
+          sets(page: 1, perPage: 50) {
+            nodes {
+              id
+              fullRoundText
+              winnerId
+              displayScore
+              slots {
+                entrant {
+                  id
+                  name
                 }
               }
             }
@@ -93,48 +131,31 @@ export class StartGGService implements IStartGGService {
     try {
       const response = await axios.post(
         this.apiUrl,
-        {
-          query: print(query),
-          variables: { id: tournamentId },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.apiToken}`,
-          },
-        }
+        { query: print(query), variables: { eventId } },
+        { headers: { Authorization: `Bearer ${this.apiToken}` } }
       );
 
-      const events = response.data?.data?.tournament?.events || [];
-      const allSets: StartGGSetResponse[] = [];
-
-      for (const event of events) {
-        const sets = event.sets?.nodes || [];
-        for (const set of sets) {
-          // On ne prend que les sets qui ont bien 2 entrants (joueurs)
-          if (set.slots && set.slots.length === 2 && set.slots[0].entrant && set.slots[1].entrant) {
-            allSets.push({
-              id: set.id.toString(),
-              roundName: set.fullRoundText,
-              bestOf: set.bestOf || 3,
-              winnerId: set.winnerId?.toString(),
-              score: set.displayScore,
-              player1: {
-                id: set.slots[0].entrant.id.toString(),
-                name: set.slots[0].entrant.name,
-              },
-              player2: {
-                id: set.slots[1].entrant.id.toString(),
-                name: set.slots[1].entrant.name,
-              },
-            });
-          }
-        }
-      }
-
-      return allSets;
+      const sets = response.data?.data?.event?.sets?.nodes || [];
+      return sets
+        .filter((s: any) => s.slots && s.slots.length === 2 && s.slots[0].entrant && s.slots[1].entrant)
+        .map((s: any) => ({
+          id: s.id.toString(),
+          roundName: s.fullRoundText,
+          bestOf: 3,
+          winnerId: s.winnerId?.toString(),
+          score: s.displayScore,
+          player1: {
+            id: s.slots[0].entrant.id.toString(),
+            name: s.slots[0].entrant.name,
+          },
+          player2: {
+            id: s.slots[1].entrant.id.toString(),
+            name: s.slots[1].entrant.name,
+          },
+        }));
     } catch (error) {
-      this.logger.error(`Error fetching sets from Start.gg: ${error.message}`);
-      throw new Error('Failed to fetch sets from Start.gg');
+      this.logger.error(`Error fetching sets for event ${eventId}: ${error.message}`);
+      return [];
     }
   }
 }
