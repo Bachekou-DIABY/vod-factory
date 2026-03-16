@@ -7,6 +7,7 @@ import { TournamentRepository } from '../infrastructure/persistence/tournament.r
 import { PlayerRepository } from '../infrastructure/persistence/player.repository';
 import { SetRepository } from '../infrastructure/persistence/set.repository';
 import { VodRepository } from '../infrastructure/persistence/vod.repository';
+import { REPOSITORY_TOKENS } from '../domain/repositories/injection-tokens';
 
 @Module({
   imports: [
@@ -19,10 +20,22 @@ import { VodRepository } from '../infrastructure/persistence/vod.repository';
   providers: [
     AppService, 
     PrismaService,
-    TournamentRepository,
-    PlayerRepository,
-    SetRepository,
-    VodRepository,
+    {
+      provide: REPOSITORY_TOKENS.TOURNAMENT,
+      useClass: TournamentRepository,
+    },
+    {
+      provide: REPOSITORY_TOKENS.PLAYER,
+      useClass: PlayerRepository,
+    },
+    {
+      provide: REPOSITORY_TOKENS.SET,
+      useClass: SetRepository,
+    },
+    {
+      provide: REPOSITORY_TOKENS.VOD,
+      useClass: VodRepository,
+    },
   ],
 })
 export class AppModule {}
