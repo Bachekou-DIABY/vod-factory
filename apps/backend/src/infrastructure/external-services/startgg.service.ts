@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { gql } from 'graphql-tag';
 import { print } from 'graphql';
-import { IStartGGService } from '../../domain/services/startgg.service.interface';
+import { IStartGGService, StartGGSetResponse } from '../../domain/services/startgg.service.interface';
 import { Tournament } from '../../domain/entities/tournament.entity';
 
 @Injectable()
@@ -65,8 +65,76 @@ export class StartGGService implements IStartGGService {
     }
   }
 
-  async getSetsByTournamentId(tournamentId: string): Promise<any[]> {
-    this.logger.log(`Fetching sets for tournament ${tournamentId} (not implemented yet)`);
-    return [];
+  async getSetsByTournamentId(tournamentId: string): Promise<StartGGSetResponse[]> {
+    const query = gql`
+      query GetTournamentSets($id: ID!) {
+        tournament(id: $id) {
+          events {
+            sets(page: 1, perPage: 100) {
+              nodes {
+                id
+                fullRoundText
+                bestOf
+                winnerId
+                displayScore
+                slots {
+                  entrant {
+                    id
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const response = await axios.post(
+        this.apiUrl,
+        {
+          query: print(query),
+          variables: { id: tournamentId },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiToken}`,
+          },
+        }
+      );
+
+      const events = response.data?.data?.tournament?.events || [];
+      const allSets: StartGGSetResponse[] = [];
+
+      for (const event of events) {
+        const sets = event.sets?.nodes || [];
+        for (const set of sets) {
+          // On ne prend que les sets qui ont bien 2 entrants (joueurs)
+          if (set.slots && set.slots.length === 2 && set.slots[0].entrant && set.slots[1].entrant) {
+            allSets.push({
+              id: set.id.toString(),
+              roundName: set.fullRoundText,
+              bestOf: set.bestOf || 3,
+              winnerId: set.winnerId?.toString(),
+              score: set.displayScore,
+              player1: {
+                id: set.slots[0].entrant.id.toString(),
+                name: set.slots[0].entrant.name,
+              },
+              player2: {
+                id: set.slots[1].entrant.id.toString(),
+                name: set.slots[1].entrant.name,
+              },
+            });
+          }
+        }
+      }
+
+      return allSets;
+    } catch (error) {
+      this.logger.error(`Error fetching sets from Start.gg: ${error.message}`);
+      throw new Error('Failed to fetch sets from Start.gg');
+    }
   }
 }
