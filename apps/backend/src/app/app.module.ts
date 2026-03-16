@@ -8,6 +8,7 @@ import { PlayerRepository } from '../infrastructure/persistence/player.repositor
 import { SetRepository } from '../infrastructure/persistence/set.repository';
 import { VodRepository } from '../infrastructure/persistence/vod.repository';
 import { REPOSITORY_TOKENS } from '../domain/repositories/injection-tokens';
+import { ImportTournamentUseCase } from '../application/use-cases/import-tournament.use-case';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { REPOSITORY_TOKENS } from '../domain/repositories/injection-tokens';
       provide: REPOSITORY_TOKENS.VOD,
       useClass: VodRepository,
     },
+    ImportTournamentUseCase,
   ],
 })
 export class AppModule {}
