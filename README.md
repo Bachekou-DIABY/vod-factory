@@ -11,8 +11,13 @@
 
 ## 🎯 Vision
 
-Automatiser l'ingestion, l'indexation et le découpage de VODs de tournois e-sport depuis Start.gg. L'objectif : permettre aux créateurs de contenu et organisateurs de tournois de retrouver et exporter automatiquement les moments clés (sets, combos, highlights) sans intervention manuelle.
+L'objectif : à partir des données Start.gg d'un tournoi, 
+extraire et exporter automatiquement les sets individuels depuis une VOD.
 
+Deux modes de fonctionnement :
+- **Mode automatique** — Start.gg bien configuré avec les timestamps → découpage et upload sans intervention
+- **Mode manuel** — l'utilisateur fournit la VOD + le tournoi → le soft s'occupe du découpage et de l'upload sur la chaîne YouTube (accès restreint aux ayants droit)
+- 
 ## 🛠️ Stack
 
 | Couche | Technologie |
