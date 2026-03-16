@@ -54,6 +54,8 @@
     "@prisma/client": "^5.22.0",
     "axios": "^1.6.0",
     "dotenv": "^17.3.1",
+    "graphql": "^16.13.1",
+    "graphql-tag": "^2.12.6",
     "prisma": "^5.22.0",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0"
