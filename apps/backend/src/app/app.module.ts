@@ -9,6 +9,7 @@ import { SetRepository } from '../infrastructure/persistence/set.repository';
 import { VodRepository } from '../infrastructure/persistence/vod.repository';
 import { REPOSITORY_TOKENS } from '../domain/repositories/injection-tokens';
 import { ImportTournamentUseCase } from '../application/use-cases/import-tournament.use-case';
+import { ImportSetsUseCase } from '../application/use-cases/import-sets.use-case';
 import { STARTGG_SERVICE_TOKEN } from '../domain/services/startgg.service.interface';
 import { StartGGService } from '../infrastructure/external-services/startgg.service';
 import { TournamentController } from '../infrastructure/http/tournament.controller';
@@ -41,6 +42,7 @@ import { TournamentController } from '../infrastructure/http/tournament.controll
       useClass: VodRepository,
     },
     ImportTournamentUseCase,
+    ImportSetsUseCase,
     {
       provide: STARTGG_SERVICE_TOKEN,
       useClass: StartGGService,

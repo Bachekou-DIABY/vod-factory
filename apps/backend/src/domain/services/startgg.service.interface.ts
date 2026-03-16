@@ -1,5 +1,23 @@
 import { Tournament } from '../entities/tournament.entity';
 
+export interface StartGGSetResponse {
+  id: string;
+  roundName: string;
+  bestOf: number;
+  winnerId: string;
+  score: string;
+  player1: {
+    id: string;
+    name: string;
+    tag?: string;
+  };
+  player2: {
+    id: string;
+    name: string;
+    tag?: string;
+  };
+}
+
 export interface IStartGGService {
   /**
    * Récupère les informations d'un tournoi depuis Start.gg via son slug.
@@ -8,8 +26,10 @@ export interface IStartGGService {
   getTournamentBySlug(slug: string): Promise<Omit<Tournament, 'id' | 'createdAt' | 'updatedAt'> | null>;
 
   /**
-   * On pourra ajouter ici d'autres méthodes plus tard (récupérer les sets, les joueurs, etc.)
+   * Récupère la liste des matchs (sets) d'un tournoi depuis Start.gg via son ID.
+   * Retourne une liste d'objets contenant les données du set et des joueurs.
    */
+  getSetsByTournamentId(tournamentId: string): Promise<StartGGSetResponse[]>;
 }
 
 export const STARTGG_SERVICE_TOKEN = 'IStartGGService';

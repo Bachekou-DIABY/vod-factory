@@ -64,4 +64,9 @@ export class StartGGService implements IStartGGService {
       throw new Error('Failed to fetch data from Start.gg');
     }
   }
+
+  async getSetsByTournamentId(tournamentId: string): Promise<any[]> {
+    this.logger.log(`Fetching sets for tournament ${tournamentId} (not implemented yet)`);
+    return [];
+  }
 }

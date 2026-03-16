@@ -1,0 +1,9 @@
+$kind: http-request
+name: Import Tournament
+method: POST
+url: "{{baseUrl}}/tournaments/import/:slug"
+order: 1000
+pathVariables:
+  - key: slug
+    value: genesis-8
+    description: The start.gg tournament slug
