@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { AppController } from '../infrastructure/app.controller';
-import { AppService } from '../infrastructure/app.service';
+import { ConfigModule } from '@nestjs/config';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { PrismaService } from '../infrastructure/persistence/prisma.service';
 import { TournamentRepository } from '../infrastructure/persistence/tournament.repository';
 import { PlayerRepository } from '../infrastructure/persistence/player.repository';
