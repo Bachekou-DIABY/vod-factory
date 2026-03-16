@@ -17,153 +17,72 @@
 
 ### ✅ Actions Réalisées
 
-#### 1. Infrastructure Monorepo Nx
+#### 1. Infrastructure & Qualité (Senior Level)
 - [x] Initialisation Nx v22.5.4
 - [x] Structure `/apps` pour projets multiples
-- [x] Configuration TypeScript partagée
-- [x] Scripts de build et de test
+- [x] **CI/CD activée** : GitHub Actions pour Lint/Test/Build automatique
+- [x] TDD (Test Driven Development) mis en place sur les Use Cases
 
-#### 2. Cœur Backend NestJS
-- [x] Génération application NestJS via Nx
-- [x] Configuration module de base
-- [x] Intégration dans l'écosystème Nx
+#### 2. Cœur Backend & Architecture
+- [x] NestJS configuré avec Clean Architecture
+- [x] Séparation stricte : `domain/`, `application/`, `infrastructure/`
+- [x] **Inversion de Dépendance (DIP)** : Utilisation de tokens DI pour découpler les couches
 
-#### 3. Architecture Clean
-- [x] Création dossier `domain/` (entités métier pures)
-- [x] Création dossier `application/` (use cases)
-- [x] Création dossier `infrastructure/` (implémentations techniques)
-- [x] Séparation des responsabilités respectée
-
-#### 4. Base de Données Prisma
-- [x] Installation Prisma v7.5.0
-- [x] Schéma complet défini :
-  - `Tournament` (tournois)
-  - `Player` (joueurs)
-  - `Set` (matchs)
-  - `Vod` (vidéos)
-- [x] Relations correctes entre entités
-- [x] Configuration isolée dans `apps/backend/`
-- [x] Client Prisma généré
-
-#### 5. Services d'Infrastructure
-- [x] `PrismaService` configuré avec connexion automatique
-- [x] `TournamentRepository` implémenté (pattern Repository)
-- [x] Import/export corrects entre couches
-
-#### 6. Configuration Docker
-- [x] `docker-compose.yml` avec PostgreSQL et Redis
-- [x] Variables d'environnement configurées
-- [x] Structure prête pour développement local
-
-#### 7. Qualité & Standards
-- [x] ESLint configuré
-- [x] Prettier configuré
-- [x] EditorConfig pour cohérence équipe
-- [x] Tests Jest configurés
-- [x] TypeScript strict
+#### 3. Base de Données Prisma
+- [x] PostgreSQL via Docker
+- [x] Schéma complet : `Tournament`, `Player`, `Set`, `Vod`
+- [x] Client Prisma généré et utilisé via des Repositories
 
 ### 📊 Progression Phase 1
 **État actuel : 100% TERMINÉE ✅**
-**Date de fin :** 15/03/2026
-**Backend démarré sur :** http://localhost:3000/api
-
-### ⏳ Actions en Attente
-**Aucune - Phase 1 terminée !**
 
 ---
 
-## 🎯 Phase 2 : Intégration Start.gg (Prochaine)
+## 🎯 Phase 2 : Intégration Start.gg ✅
 
 ### Objectif
-Récupérer les données des tournois Smash depuis l'API GraphQL de Start.gg.
+Récupérer les données des tournois depuis l'API GraphQL de Start.gg.
 
-### Actions Prévues
-1. **Module Start.gg Infrastructure**
-   - Client GraphQL configuré
-   - Gestion tokens API
-   - Rate limiting
+### ✅ Actions Réalisées
+- [x] **IStartGGService** : Interface définie dans le domaine
+- [x] **StartGGService** : Implémentation réelle avec GraphQL (Axios + graphql-tag)
+- [x] **Gestion de la Complexité** : Récupération par événements pour éviter les timeouts API
+- [x] **Filtres Intelligents** : Importation ciblée sur les jeux populaires (Ultimate, Melee, etc.)
+- [x] **ImportTournamentUseCase** : Création/Récupération de tournois automatiques
+- [x] **ImportSetsUseCase** : Importation massive de matchs et création automatique des joueurs
 
-2. **Interfaces Domain**
-   - `ITournamentRepository` (déjà fait)
-   - `IStartGGService`
-   - `ITournamentService`
-
-3. **Services Application**
-   - `TournamentUseCase`
-   - `PlayerUseCase`
-   - `SetUseCase`
-
-4. **Tests Unitaires**
-   - Mock repositories
-   - Validation use cases
+### 📊 Progression Phase 2
+**État actuel : 100% TERMINÉE ✅**
 
 ---
 
-## 🔄 Phase 3 : Video Processing (Futur)
+## 🔄 Phase 3 : Video Management & VODs (Actuelle) 🏃‍♂️
 
 ### Objectif
-Découper automatiquement les VODs de 10h en matchs individuels.
+Lier des sources vidéo aux tournois et préparer le découpage.
 
 ### Actions Prévues
-1. **Queue Management**
-   - Configuration BullMQ
-   - Workers Redis
-   - Gestion erreurs
+1. **Gestion des VODs**
+   - [ ] Création du `VodRepository`
+   - [ ] Use Case : `AddVodToTournament`
+   - [ ] Validation des URLs (YouTube/Twitch)
 
-2. **Video Processing**
-   - Service FFmpeg
-   - Découpage par timestamps
-   - Gestion métadonnées
-
-3. **Computer Vision**
-   - Service OpenCV
-   - Détection scènes de fin de match
-   - Validation automatique
+2. **Système de Files (Background Jobs)**
+   - [ ] Configuration de BullMQ avec Redis
+   - [ ] Création des premiers Workers
 
 ---
 
-## 📱 Phase 4 : Frontend Dashboard (Futur)
+## 🏗️ Phase 4 : Video Processing & OpenCV (Futur)
 
 ### Objectif
-Interface Angular pour suivre l'avancement et gérer les traitements.
+Le "cœur nucléaire" : découpage automatique.
 
 ### Actions Prévues
-1. **Application Angular**
-   - Génération via Nx
-   - Modules par feature
-   - Routing lazy-loading
+1. **FFmpeg Integration**
+   - Service de manipulation vidéo
+   - Découpage par segments
 
-2. **Consommation API**
-   - Services HTTP
-   - Gestion erreurs
-   - Real-time updates
-
-3. **UI/UX**
-   - Tableaux de bord
-   - Suivi traitements
-   - Notifications
-
----
-
-## 📈 Métriques & KPIs
-
-### Techniques
-- [x] Architecture Clean respectée
-- [x] TypeScript strict
-- [x] Tests configurés
-- [ ] Couverture tests > 80%
-- [ ] Documentation API
-
-### Fonctionnelles
-- [ ] Récupération tournois Start.gg
-- [ ] Découpage automatique VODs
-- [ ] Dashboard utilisateur
-- [ ] Déploiement production
-
----
-
-## 🔄 Mise à Jour
-
-*Ce document est mis à jour à chaque étape majeure du projet pour garder une vision claire de l'avancement.*
-
-**Dernière mise à jour :** 15/03/2026 - Phase 1 à 90%
+2. **Computer Vision**
+   - Service OpenCV pour détecter les écrans de victoire
+   - Synchronisation match <-> segment vidéo
