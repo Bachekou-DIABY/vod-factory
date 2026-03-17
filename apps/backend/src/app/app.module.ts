@@ -13,6 +13,13 @@ import { ImportSetsUseCase } from '../application/use-cases/import-sets.use-case
 import { STARTGG_SERVICE_TOKEN } from '../domain/services/startgg.service.interface';
 import { StartGGService } from '../infrastructure/external-services/startgg.service';
 import { TournamentController } from '../infrastructure/http/tournament.controller';
+import { VodController } from '../infrastructure/http/vod.controller';
+import { BullModule } from '@nestjs/bullmq';
+import { QUEUE_NAMES } from '../domain/queues/queue-tokens';
+import { VideoInfoService } from '../infrastructure/external-services/video-info.service';
+import { AddVodUseCase } from '../application/use-cases/add-vod.use-case';
+import { ConfigService } from '@nestjs/config';
+import { VideoProcessingWorker } from '../infrastructure/workers/video-processing.worker';
 
 @Module({
   imports: [
@@ -20,8 +27,20 @@ import { TournamentController } from '../infrastructure/http/tournament.controll
       isGlobal: true,
       envFilePath: ['.env', '.env.local'],
     }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          host: config.get('REDIS_HOST', 'localhost'),
+          port: config.get('REDIS_PORT', 6379),
+        },
+      }),
+    }),
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.VIDEO_PROCESSING,
+    }),
   ],
-  controllers: [AppController, TournamentController],
+  controllers: [AppController, TournamentController, VodController],
   providers: [
     AppService, 
     PrismaService,
@@ -43,6 +62,9 @@ import { TournamentController } from '../infrastructure/http/tournament.controll
     },
     ImportTournamentUseCase,
     ImportSetsUseCase,
+    AddVodUseCase,
+    VideoInfoService,
+    VideoProcessingWorker,
     {
       provide: STARTGG_SERVICE_TOKEN,
       useClass: StartGGService,

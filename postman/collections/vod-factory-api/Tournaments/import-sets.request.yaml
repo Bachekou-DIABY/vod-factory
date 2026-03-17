@@ -2,7 +2,7 @@ $kind: http-request
 name: Import Sets
 method: POST
 url: "{{baseUrl}}/tournaments/import-sets/:id"
-order: 2000
+order: 3000
 pathVariables:
   - key: id
     value: "174838"

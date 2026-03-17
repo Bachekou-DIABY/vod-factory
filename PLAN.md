@@ -57,33 +57,37 @@ Récupérer les données des tournois depuis l'API GraphQL de Start.gg.
 
 ---
 
-## 🔄 Phase 3 : Video Management & VODs (Actuelle) 🏃‍♂️
+## 🔄 Phase 3 : Video Management & VODs (VOD Ingestion) ✅
 
 ### Objectif
 Lier des sources vidéo aux tournois et préparer le découpage.
 
-### Actions Prévues
+### ✅ Actions Réalisées
 1. **Gestion des VODs**
-   - [ ] Création du `VodRepository`
-   - [ ] Use Case : `AddVodToTournament`
-   - [ ] Validation des URLs (YouTube/Twitch)
+   - [x] Création du `VodRepository`
+   - [x] Use Case : `AddVodToTournament`
+   - [x] Validation des URLs (YouTube/Twitch)
 
 2. **Système de Files (Background Jobs)**
-   - [ ] Configuration de BullMQ avec Redis
-   - [ ] Création des premiers Workers
+   - [x] Configuration de BullMQ avec Redis
+   - [x] Création du `VideoProcessingWorker` (Moteur de queue)
+
+### 📊 Progression Phase 3
+**État actuel : 100% TERMINÉE ✅**
 
 ---
 
-## 🏗️ Phase 4 : Video Processing & OpenCV (Futur)
+## 🏗️ Phase 4 : Video Processing & OpenCV (Actuelle) 🏃‍♂️
 
 ### Objectif
 Le "cœur nucléaire" : découpage automatique.
 
 ### Actions Prévues
 1. **FFmpeg Integration**
-   - Service de manipulation vidéo
-   - Découpage par segments
+   - [ ] Service de manipulation vidéo
+   - [ ] Téléchargement segmenté des flux
+   - [ ] Découpage par segments
 
 2. **Computer Vision**
-   - Service OpenCV pour détecter les écrans de victoire
-   - Synchronisation match <-> segment vidéo
+   - [ ] Service OpenCV pour détecter les écrans de victoire
+   - [ ] Synchronisation match <-> segment vidéo (Indexation temporelle)
