@@ -8,11 +8,18 @@ import { PlayerRepository } from '../infrastructure/persistence/player.repositor
 import { SetRepository } from '../infrastructure/persistence/set.repository';
 import { VodRepository } from '../infrastructure/persistence/vod.repository';
 import { REPOSITORY_TOKENS } from '../domain/repositories/injection-tokens';
+import { VOD_REPOSITORY_TOKEN } from '../domain/repositories/vod.repository.interface';
+import { SET_REPOSITORY_TOKEN } from '../domain/repositories/set.repository.interface';
 import { ImportTournamentUseCase } from '../application/use-cases/import-tournament.use-case';
 import { ImportSetsUseCase } from '../application/use-cases/import-sets.use-case';
+import { AddVodToTournamentUseCase } from '../application/use-cases/add-vod-to-tournament.usecase';
+import { AnalyzeVodUseCase } from '../application/use-cases/analyze-vod.usecase';
 import { STARTGG_SERVICE_TOKEN } from '../domain/services/startgg.service.interface';
+import { GAME_SCREEN_DETECTOR_TOKEN } from '../domain/interfaces/game-screen-detector.interface';
 import { StartGGService } from '../infrastructure/external-services/startgg.service';
+import { OcrGameScreenDetector } from '../infrastructure/external-services/ocr-game-screen-detector.service';
 import { TournamentController } from '../infrastructure/http/tournament.controller';
+import { VodController } from '../infrastructure/http/vod.controller';
 
 @Module({
   imports: [
@@ -21,7 +28,7 @@ import { TournamentController } from '../infrastructure/http/tournament.controll
       envFilePath: ['.env', '.env.local'],
     }),
   ],
-  controllers: [AppController, TournamentController],
+  controllers: [AppController, TournamentController, VodController],
   providers: [
     AppService, 
     PrismaService,
@@ -38,14 +45,24 @@ import { TournamentController } from '../infrastructure/http/tournament.controll
       useClass: SetRepository,
     },
     {
-      provide: REPOSITORY_TOKENS.VOD,
+      provide: VOD_REPOSITORY_TOKEN,
       useClass: VodRepository,
+    },
+    {
+      provide: SET_REPOSITORY_TOKEN,
+      useClass: SetRepository,
     },
     ImportTournamentUseCase,
     ImportSetsUseCase,
+    AddVodToTournamentUseCase,
+    AnalyzeVodUseCase,
     {
       provide: STARTGG_SERVICE_TOKEN,
       useClass: StartGGService,
+    },
+    {
+      provide: GAME_SCREEN_DETECTOR_TOKEN,
+      useClass: OcrGameScreenDetector,
     },
   ],
 })

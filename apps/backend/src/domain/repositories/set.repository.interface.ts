@@ -1,5 +1,7 @@
 import { Set } from '../entities/set.entity';
 
+export const SET_REPOSITORY_TOKEN = Symbol('SET_REPOSITORY_TOKEN');
+
 export interface ISetRepository {
   create(set: Omit<Set, 'id' | 'createdAt' | 'updatedAt'>): Promise<Set>;
   findById(id: string): Promise<Set | null>;
