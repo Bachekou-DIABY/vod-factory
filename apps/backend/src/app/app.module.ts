@@ -16,6 +16,8 @@ import { AddVodToTournamentUseCase } from '../application/use-cases/add-vod-to-t
 import { AnalyzeVodUseCase } from '../application/use-cases/analyze-vod.usecase';
 import { STARTGG_SERVICE_TOKEN } from '../domain/services/startgg.service.interface';
 import { GAME_SCREEN_DETECTOR_TOKEN } from '../domain/interfaces/game-screen-detector.interface';
+import { VOD_DOWNLOAD_SERVICE_TOKEN } from '../domain/interfaces/vod-download-service.interface';
+import { YtDlpDownloadService } from '../infrastructure/external-services/yt-dlp-download.service';
 import { StartGGService } from '../infrastructure/external-services/startgg.service';
 import { OcrGameScreenDetector } from '../infrastructure/external-services/ocr-game-screen-detector.service';
 import { TournamentController } from '../infrastructure/http/tournament.controller';
@@ -63,6 +65,10 @@ import { VodController } from '../infrastructure/http/vod.controller';
     {
       provide: GAME_SCREEN_DETECTOR_TOKEN,
       useClass: OcrGameScreenDetector,
+    },
+    {
+      provide: VOD_DOWNLOAD_SERVICE_TOKEN,
+      useClass: YtDlpDownloadService,
     },
   ],
 })
