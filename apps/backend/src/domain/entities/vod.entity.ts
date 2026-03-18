@@ -12,6 +12,7 @@ export interface Vod {
   id: string;
   setId: string;
   sourceUrl: string;
+  filePath?: string; // Chemin local du fichier téléchargé
   processedUrl?: string;
   status: VodStatus;
   duration?: number;

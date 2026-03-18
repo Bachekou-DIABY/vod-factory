@@ -1,5 +1,7 @@
 import { Vod, VodStatus } from '../entities/vod.entity';
 
+export const VOD_REPOSITORY_TOKEN = Symbol('VOD_REPOSITORY_TOKEN');
+
 export interface IVodRepository {
   create(vod: Omit<Vod, 'id' | 'createdAt' | 'updatedAt'>): Promise<Vod>;
   findById(id: string): Promise<Vod | null>;
