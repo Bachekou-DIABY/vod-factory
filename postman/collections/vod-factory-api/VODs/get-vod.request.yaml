@@ -1,0 +1,7 @@
+$kind: http-request
+name: Get VOD
+method: GET
+url: "{{baseUrl}}/vods/:id"
+pathVariables:
+  id: VOD_ID
+order: 2000

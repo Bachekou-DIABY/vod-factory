@@ -3,5 +3,5 @@ name: Import Tournament
 method: POST
 url: "{{baseUrl}}/tournaments/import/:slug"
 pathVariables:
-  slug: le-parthenon-6
+  slug: la-suite-7
 order: 2000

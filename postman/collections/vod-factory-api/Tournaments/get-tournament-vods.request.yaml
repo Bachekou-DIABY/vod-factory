@@ -1,0 +1,7 @@
+$kind: http-request
+name: Get Tournament VODs
+method: GET
+url: "{{baseUrl}}/tournaments/:id/vods"
+pathVariables:
+  id: TOURNAMENT_ID
+order: 5000

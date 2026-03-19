@@ -1,0 +1,5 @@
+$kind: http-request
+name: Add VOD
+method: POST
+url: "{{baseUrl}}/vods"
+order: 1000

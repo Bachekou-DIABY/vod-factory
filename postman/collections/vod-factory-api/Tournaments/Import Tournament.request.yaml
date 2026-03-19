@@ -1,5 +1,0 @@
-$kind: http-request
-name: Import Tournament
-url: "{{baseUrl}}/tournaments/import-sets/id"
-method: POST
-order: 1053

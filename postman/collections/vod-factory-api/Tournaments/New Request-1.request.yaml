@@ -1,5 +1,0 @@
-$kind: http-request
-name: New Request
-url: http://localhost:3000/api/tournaments/cmmwklx6e000014970vpf12em/sets
-method: POST
-order: 4000

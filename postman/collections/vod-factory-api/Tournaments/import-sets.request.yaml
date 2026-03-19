@@ -1,0 +1,7 @@
+$kind: http-request
+name: Import Sets
+method: POST
+url: "{{baseUrl}}/tournaments/import-sets/:id"
+pathVariables:
+  id: TOURNAMENT_ID
+order: 3000
