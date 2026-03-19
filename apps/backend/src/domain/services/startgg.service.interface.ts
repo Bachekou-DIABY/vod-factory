@@ -6,6 +6,12 @@ export interface StartGGSetResponse {
   bestOf: number;
   winnerId: string;
   score: string;
+  startTime?: string;  // ISO datetime
+  endTime?: string;    // ISO datetime
+  stream?: {
+    streamName: string;
+    streamId: string;
+  };
   player1: {
     id: string;
     name: string;

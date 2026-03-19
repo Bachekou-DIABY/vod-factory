@@ -11,6 +11,7 @@ export enum VodStatus {
 export interface Vod {
   id: string;
   setId: string;
+  tournamentId?: string; // ID du tournoi pour filtrage
   sourceUrl: string;
   filePath?: string; // Chemin local du fichier téléchargé
   processedUrl?: string;

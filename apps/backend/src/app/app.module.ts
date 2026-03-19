@@ -14,6 +14,7 @@ import { ImportTournamentUseCase } from '../application/use-cases/import-tournam
 import { ImportSetsUseCase } from '../application/use-cases/import-sets.use-case';
 import { AddVodToTournamentUseCase } from '../application/use-cases/add-vod-to-tournament.usecase';
 import { AnalyzeVodUseCase } from '../application/use-cases/analyze-vod.usecase';
+import { GetTournamentVodsUseCase } from '../application/use-cases/get-tournament-vods.usecase';
 import { STARTGG_SERVICE_TOKEN } from '../domain/services/startgg.service.interface';
 import { GAME_SCREEN_DETECTOR_TOKEN } from '../domain/interfaces/game-screen-detector.interface';
 import { VOD_DOWNLOAD_SERVICE_TOKEN } from '../domain/interfaces/vod-download-service.interface';
@@ -22,6 +23,9 @@ import { StartGGService } from '../infrastructure/external-services/startgg.serv
 import { OcrGameScreenDetector } from '../infrastructure/external-services/ocr-game-screen-detector.service';
 import { TournamentController } from '../infrastructure/http/tournament.controller';
 import { VodController } from '../infrastructure/http/vod.controller';
+import { TournamentVodsController } from '../infrastructure/http/tournament-vods.controller';
+import { TournamentSetsController } from '../infrastructure/http/tournament-sets.controller';
+import { ListTournamentsController } from '../infrastructure/http/list-tournaments.controller';
 
 @Module({
   imports: [
@@ -30,7 +34,7 @@ import { VodController } from '../infrastructure/http/vod.controller';
       envFilePath: ['.env', '.env.local'],
     }),
   ],
-  controllers: [AppController, TournamentController, VodController],
+  controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController],
   providers: [
     AppService, 
     PrismaService,
@@ -58,6 +62,7 @@ import { VodController } from '../infrastructure/http/vod.controller';
     ImportSetsUseCase,
     AddVodToTournamentUseCase,
     AnalyzeVodUseCase,
+    GetTournamentVodsUseCase,
     {
       provide: STARTGG_SERVICE_TOKEN,
       useClass: StartGGService,

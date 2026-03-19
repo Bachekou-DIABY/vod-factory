@@ -4,7 +4,7 @@
 
 **VOD-Factory** est une plateforme SaaS d'indexation et de découpage automatisé de VODs e-sport avec focus sur Super Smash Bros. Ultimate.
 
-- **Stack Technique** : Monorepo Nx, NestJS (Back), Angular (Front), Prisma (PostgreSQL), BullMQ (Redis), FFmpeg + OpenCV (Processing)
+- **Stack Technique** : Monorepo Nx, NestJS (Back), Angular (Front), Prisma (PostgreSQL), BullMQ (Redis), FFmpeg + Tesseract.js (Processing)
 - **Architecture** : Clean Architecture / Architecture Hexagonale
 - **Profil** : Développeur Fullstack Senior spécialisé Backend/Node.js
 
@@ -17,25 +17,24 @@
 
 ### ✅ Actions Réalisées
 
-#### 1. Infrastructure & Qualité (Senior Level)
+#### 1. Infrastructure & Qualité
 - [x] Initialisation Nx v22.5.4
 - [x] Structure `/apps` pour projets multiples
-- [x] **CI/CD activée** : GitHub Actions pour Lint/Test/Build automatique
-- [x] TDD (Test Driven Development) mis en place sur les Use Cases
+- [x] CI/CD GitHub Actions (Lint/Test/Build)
+- [x] TDD sur les Use Cases
 
 #### 2. Cœur Backend & Architecture
 - [x] NestJS configuré avec Clean Architecture
 - [x] Séparation stricte : `domain/`, `application/`, `infrastructure/`
-- [x] **Inversion de Dépendance (DIP)** : Utilisation de tokens DI pour découpler les couches
-- [x] **Mappers de Données** : Isolation totale entre Prisma et le Domaine métier
+- [x] Inversion de Dépendance (DIP) via tokens NestJS
+- [x] Mappers de données (isolation Prisma ↔ Domaine)
 
 #### 3. Base de Données Prisma
 - [x] PostgreSQL via Docker
-- [x] Schéma complet : `Tournament`, `Player`, `Set`, `Vod`
-- [x] Client Prisma généré et utilisé via des Repositories
+- [x] Schéma : `Tournament`, `Player`, `Set`, `Vod`
+- [x] Client Prisma configuré pour Nx monorepo
 
-### 📊 Progression Phase 1
-**État actuel : 100% TERMINÉE ✅**
+### 📊 Progression Phase 1 : **100% ✅**
 
 ---
 
@@ -45,110 +44,106 @@
 Récupérer les données des tournois depuis l'API GraphQL de Start.gg.
 
 ### ✅ Actions Réalisées
-- [x] **IStartGGService** : Interface définie dans le domaine
-- [x] **StartGGService** : Implémentation réelle avec GraphQL (Axios + graphql-tag)
-- [x] **Gestion de la Complexité** : Récupération par événements pour éviter les timeouts API
-- [x] **Filtres Intelligents** : Importation ciblée sur les jeux populaires (Ultimate, Melee, etc.)
-- [x] **ImportTournamentUseCase** : Création/Récupération de tournois automatiques
-- [x] **ImportSetsUseCase** : Importation massive de matchs et création automatique des joueurs
+- [x] `IStartGGService` + `StartGGService` (GraphQL via Axios)
+- [x] Filtres par jeux (Ultimate, Melee, etc.)
+- [x] `ImportTournamentUseCase` + `ImportSetsUseCase`
+- [x] Tests unitaires TDD
 
-### 📊 Progression Phase 2
-**État actuel : 100% TERMINÉE ✅**
+### ⚠️ Limitation connue
+- `getSetsByEventId` paginé à 50/page sans boucle → sets tronqués si > 50 par event (à corriger en Phase 5)
+
+### 📊 Progression Phase 2 : **100% ✅** (fonctionnel, limitation pagination connue)
 
 ---
 
-## 🔄 Phase 3 : Video Management & VODs (Actuelle) 🏃‍♂️
+## 🔄 Phase 3 : Video Management & VODs ✅
 
 ### Objectif
-Lier des sources vidéo aux tournois et préparer le découpage.
+Lier des sources vidéo aux tournois et télécharger les VODs.
 
 ### ✅ Actions Réalisées
-1. **Gestion des VODs**
-   - [x] Schéma Prisma Vod avec métadonnées Twitch/YouTube
-   - [x] **Fix Prisma Client** : Configuration du `output` pour Nx monorepo
-   - [x] Prisma Service avec logs améliorés
+- [x] `Vod` entity dans le domaine (`filePath`, `status`, métadonnées Twitch/YouTube)
+- [x] `VodRepository` avec Prisma
+- [x] `YtDlpDownloadService` : téléchargement réel via `yt-dlp`
+- [x] `AddVodToTournamentUseCase` + `GetTournamentVodsUseCase`
+- [x] `VodController` : `POST /api/vods`, `GET /api/vods/:id`
+- [x] Templates croppés générés dans `storage/templates/cropped/`
 
-2. **Templates de Référence** ✅
-   - [x] Génération des templates croppés dans `storage/templates/cropped/`
-   - [x] 4 templates : `start_go`, `start_partez`, `end_game`, `end_fini`
-   - [x] Zone centrale isolée (30%) pour OCR
+### ⚠️ Limitation connue
+- `duration: 0` hardcodé dans `YtDlpDownloadService` (ffprobe à intégrer en Phase 5)
 
-### 📊 Progression Phase 3
-**État actuel : 95% TERMINÉE ✅** (Prisma stable, templates prêts)
+### 📊 Progression Phase 3 : **100% ✅**
 
 ---
 
-## 🏗️ Phase 4 : Video Processing & OCR Detection (En Cours) 🚧
+## 🏗️ Phase 4 : Video Processing & OCR Detection 🚧
 
 ### Objectif
 Le "cœur nucléaire" : découpage automatique via OCR (pas de Template Matching).
 
-### Stratégie "Senior" : Focus OCR + Zone Centrale
-Au lieu de comparer des images entières (fragile aux changements de map), on :
-1. **Crope la zone centrale** (30% de l'image) où apparaissent "GO", "PARTEZ", "GAME", "FINI"
-2. **OCR avec Tesseract.js** : On "lit" le texte, on ne compare pas les pixels
+### Stratégie : OCR + Zone Centrale
+1. **Croper la zone centrale** (30%) où apparaissent "GO", "PARTEZ", "GAME", "FINI"
+2. **OCR avec Tesseract.js** : lire le texte, pas comparer les pixels
 3. **Mots-clés multilingues** : go/partez/start/begin + game/fini/end/finish/set
 
 ### ✅ Actions Réalisées
-1. **Architecture OCR**
-   - [x] `IGameScreenDetector` interface (domaine)
-   - [x] `OcrGameScreenDetector` service avec Tesseract.js
-   - [x] Mots-clés de détection configurés
-   - [x] Seuil de confiance : 70%
+- [x] `IGameScreenDetector` interface propre
+- [x] `OcrGameScreenDetector` : pipeline complet FFmpeg → OCR → events
+- [x] `AnalyzeVodUseCase` : logique de comptage des games (`countGames`)
+- [x] `POST /api/vods/:id/analyze` endpoint dans `VodController`
+- [x] `tesseract.js` + `fluent-ffmpeg` installés
+- [x] Extraction frames 1fps avec crop zone centrale 30%
+- [x] Déduplication événements (fenêtre 5 secondes)
+- [x] Cleanup automatique des frames temporaires
 
-2. **Use Case Analyse**
-   - [x] `AnalyzeVodUseCase` créé
-   - [x] Logique de comptage des games (pairs START/END)
+### 🚧 À faire
+- [ ] Tester sur une VOD réelle et affiner les seuils OCR si besoin
 
-### 🚧 Actions en Cours
-3. **HTTP Layer**
-   - [ ] `VodController` avec endpoint `POST /api/vods/:id/analyze`
-   - [ ] DTOs pour la requête/réponse
-   - [ ] Configuration des providers NestJS
-
-4. **Video Processing**
-   - [ ] Intégration FFmpeg pour extraction frames
-   - [ ] 1 frame/sec pour analyse rapide
-   - [ ] Pipeline : Download → OCR → Timestamps → Découpage
-
-### 📊 Progression Phase 4
-**État actuel : 40% - Architecture OCR en place, manque l'intégration FFmpeg/HTTP**
+### 📊 Progression Phase 4 : **80%** (pipeline complet, validation terrain restante)
 
 ---
 
-## 🎯 Prochaines Étapes Prioritaires
+## 🎯 Phase 5 : Découpage & Export (Futur)
 
-### 1. Terminer Phase 4 (OCR) 🚧
-- [ ] Créer `VodController` avec endpoint analyze
-- [ ] Configurer le module avec les providers
-- [ ] Intégrer FFmpeg pour extraction vidéo
-- [ ] Tester sur une VOD réelle
-
-### 2. Phase 5 : Découpage & Export (Futur)
 - [ ] Découpage sans ré-encodage (`ffmpeg -c copy`)
+- [ ] Association Set ↔ Segment vidéo (modèle `VideoSegment` à créer)
 - [ ] Upload vers S3/Cloud Storage
-- [ ] Association Set ↔ Segment vidéo
+- [ ] Corriger pagination Start.gg (> 50 sets/event)
 
 ---
 
-## 🛠️ Stack Technique Détaillée
+## 🔒 Sécurité
+
+- [x] `.env` retiré du tracking git + `.gitignore` mis à jour
+- [x] Token Start.gg révoqué et remplacé
+
+---
+
+## 🛠️ Stack Technique
 
 | Couche | Technologie |
 |--------|-------------|
 | Monorepo | Nx 22.5.4 |
 | Backend | NestJS 11, TypeScript 5.9 |
 | Base de données | PostgreSQL 15, Prisma 5.22 |
-| Cache/Jobs | Redis, BullMQ |
+| Cache/Jobs | Redis (Docker OK, BullMQ pas encore intégré) |
 | OCR | Tesseract.js 5.x |
-| Video | FFmpeg (à intégrer) |
-| Templates | Jimp (génération cropped) |
+| Video | fluent-ffmpeg 2.x |
+| Download | yt-dlp (CLI externe) |
 
 ---
 
-## 📝 Notes & Apprentissages
+## 📝 Historique
 
 **18/03/2026** :
-- Rollback réussi après approche Template Matching trop fragile
-- Migration vers OCR pure avec Tesseract.js
+- Rollback Template Matching → OCR pure avec Tesseract.js
 - Fix Prisma Client output pour Nx monorepo
-- Templates de référence générés et stockés dans `storage/templates/cropped/`
+- Templates de référence générés (usage : calibration OCR, pas template matching)
+
+**19/03/2026** :
+- Audit complet du codebase, réalignement du plan sur l'état réel
+- Fix `filePath` : migration Prisma + mapper + interface `download()` optional
+- Fix route collision `/:id/vods` dans `TournamentVodsController`
+- Implémentation pipeline OCR complet : FFmpeg frames → Tesseract → déduplication
+- Suppression code mort `calibrateWithTemplates()` (vestige Template Matching)
+- Sécurité : `.env` retiré du git, token révoqué

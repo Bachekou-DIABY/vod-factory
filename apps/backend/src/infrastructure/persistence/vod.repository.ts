@@ -85,4 +85,12 @@ export class VodRepository implements IVodRepository {
     });
     return vods.map(VodMapper.toDomain);
   }
+
+  async findByTournamentId(tournamentId: string): Promise<Vod[]> {
+    const vods = await this.prisma.vod.findMany({
+      where: { tournamentId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return vods.map(VodMapper.toDomain);
+  }
 }

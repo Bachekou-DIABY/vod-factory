@@ -70,7 +70,9 @@ model Set {
 model Vod {
   id            String      @id @default(cuid())
   setId          String
+  tournamentId   String?     // Tournoi pour filtrage
   sourceUrl     String      // Original VOD URL (Twitch, YouTube, etc.)
+  filePath      String?     // Local path of the downloaded file
   processedUrl  String?     // Processed video URL
   status        VodStatus   @default(PENDING)
   duration      Int?        // Duration in seconds

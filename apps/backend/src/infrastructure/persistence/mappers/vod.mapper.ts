@@ -7,6 +7,7 @@ export class VodMapper {
       id: prismaVod.id,
       setId: prismaVod.setId,
       sourceUrl: prismaVod.sourceUrl,
+      filePath: prismaVod.filePath ?? undefined,
       processedUrl: prismaVod.processedUrl ?? undefined,
       status: prismaVod.status as unknown as VodStatus,
       duration: prismaVod.duration ?? undefined,

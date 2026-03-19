@@ -17,6 +17,6 @@ export interface DownloadResult {
 }
 
 export interface IVodDownloadService {
-  download(url: string, outputPath: string, onProgress?: (progress: DownloadProgress) => void): Promise<DownloadResult>;
+  download(url: string, outputPath?: string, onProgress?: (progress: DownloadProgress) => void): Promise<DownloadResult>;
   getVideoInfo(url: string): Promise<{ title: string; duration: number; uploader: string }>;
 }

@@ -6,6 +6,7 @@ export interface IVodRepository {
   create(vod: Omit<Vod, 'id' | 'createdAt' | 'updatedAt'>): Promise<Vod>;
   findById(id: string): Promise<Vod | null>;
   findBySetId(setId: string): Promise<Vod[]>;
+  findByTournamentId(tournamentId: string): Promise<Vod[]>;
   findByStatus(status: VodStatus): Promise<Vod[]>;
   update(id: string, data: Partial<Vod>): Promise<Vod>;
   updateStatus(id: string, status: VodStatus): Promise<Vod>;

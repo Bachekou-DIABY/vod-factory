@@ -16,6 +16,13 @@ interface StartGGSetNode {
   fullRoundText: string;
   winnerId: number | string | null;
   displayScore: string;
+  bestOf?: number;
+  startedAt?: number;
+  completedAt?: number;
+  stream?: {
+    streamName: string;
+    streamId: string;
+  };
   slots: {
     entrant: {
       id: number | string;
@@ -131,6 +138,13 @@ export class StartGGService implements IStartGGService {
               fullRoundText
               winnerId
               displayScore
+              startedAt
+              completedAt
+              bestOf
+              stream {
+                streamName
+                streamId
+              }
               slots {
                 entrant {
                   id
@@ -152,14 +166,26 @@ export class StartGGService implements IStartGGService {
 
       const sets = (response.data?.data?.event?.sets?.nodes || []) as StartGGSetNode[];
       
+      // Log pour voir les données brutes de quelques sets
+      if (sets.length > 0) {
+        this.logger.log(`📊 Sample set data from Start.gg:`);
+        this.logger.log(JSON.stringify(sets.slice(0, 2), null, 2));
+      }
+      
       return sets
         .filter((s) => s.slots && s.slots.length === 2 && s.slots[0].entrant && s.slots[1].entrant)
         .map((s) => ({
           id: s.id.toString(),
           roundName: s.fullRoundText,
-          bestOf: 3,
+          bestOf: s.bestOf || 3, // Default à 3 si l'API ne renvoie rien
           winnerId: s.winnerId?.toString(),
           score: s.displayScore,
+          startTime: s.startedAt ? new Date(s.startedAt * 1000).toISOString() : undefined,
+          endTime: s.completedAt ? new Date(s.completedAt * 1000).toISOString() : undefined,
+          stream: s.stream ? {
+            streamName: s.stream.streamName,
+            streamId: s.stream.streamId,
+          } : undefined,
           player1: {
             id: s.slots[0].entrant!.id.toString(),
             name: s.slots[0].entrant!.name,
