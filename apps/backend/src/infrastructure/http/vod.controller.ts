@@ -9,7 +9,7 @@ class CreateVodDto implements AddVodToTournamentInput {
   metadata?: Record<string, any>;
 }
 
-@Controller('api/vods')
+@Controller('vods')
 export class VodController {
   private readonly logger = new Logger(VodController.name);
 

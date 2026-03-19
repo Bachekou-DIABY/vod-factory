@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Logger } from '@nestjs/common';
+import { Controller, Get, Inject, Logger, Param, NotFoundException } from '@nestjs/common';
 import { TournamentRepository } from '../../infrastructure/persistence/tournament.repository';
 
 @Controller('tournaments')
@@ -20,5 +20,13 @@ export class ListTournamentsController {
       slug: t.slug,
       startAt: t.startAt,
     }));
+  }
+
+  @Get(':slug')
+  async findBySlug(@Param('slug') slug: string) {
+    this.logger.log(`🔍 Get tournament by slug: ${slug}`);
+    const tournament = await this.tournamentRepository.findBySlug(slug);
+    if (!tournament) throw new NotFoundException(`Tournament "${slug}" not found`);
+    return tournament;
   }
 }
