@@ -96,19 +96,32 @@ Le "cœur nucléaire" : découpage automatique via OCR (pas de Template Matching
 - [x] Déduplication événements (fenêtre 5 secondes)
 - [x] Cleanup automatique des frames temporaires
 
-### 🚧 À faire
-- [ ] Tester sur une VOD réelle et affiner les seuils OCR si besoin
+### ✅ Réalisé (20/03/2026) — réécriture complète stratégie détection
+- [x] Abandon Tesseract/OCR → détection par présence HUD timer (% pixels blancs zone top-right)
+- [x] State machine robuste : cooldown 25s post-END, 3 frames consécutives absentes, durée min 90s
+- [x] Validé sur 2 VODs : 9/9 games (2 BO5) + 3/3 games (3-0)
+- [x] `IVodClipper` + `FfmpegVodClipper` : clipping `-c copy` sans ré-encodage
+- [x] `ClipVodUseCase` : 1 clip par VOD (firstSTART-15s → lastEND+15s)
+- [x] `POST /api/vods/:id/clip` endpoint
+- [x] `AnalyzeVodUseCase` persiste `startTime`/`endTime` en base
+- [x] `YtDlpDownloadService` : 1080p + merge manuel video+audio (AAC 192k) si yt-dlp ne merge pas
+- [x] Fix Windows : spawn direct ffmpeg (pas fluent-ffmpeg) pour extraction frames
 
-### 📊 Progression Phase 4 : **80%** (pipeline complet, validation terrain restante)
+### 🚧 À faire
+- [ ] Tester sur une VOD longue (10h+) — valider seuils sur streams multi-sets avec longues pauses
+- [ ] Workers parallèles BullMQ : implémenter la possibilité de splitter le traitement entre plusieurs workers (download / analyze / clip en jobs séparés dans une queue Redis)
+
+### 📊 Progression Phase 4 : **95%** (pipeline validé, robustesse longues VODs + workers à faire)
 
 ---
 
-## 🎯 Phase 5 : Découpage & Export (Futur)
+## 🎯 Phase 5 : Upload & Scale
 
-- [ ] Découpage sans ré-encodage (`ffmpeg -c copy`)
-- [ ] Association Set ↔ Segment vidéo (modèle `VideoSegment` à créer)
-- [ ] Upload vers S3/Cloud Storage
+- [ ] **Test VOD longue (10h+)** en priorité — valider avant d'uploader quoi que ce soit
+- [ ] Upload YouTube automatique (OAuth2 Google, YouTube Data API v3)
+- [ ] Workers BullMQ parallèles (jobs : download / analyze / clip / upload)
 - [ ] Corriger pagination Start.gg (> 50 sets/event)
+- [ ] `ffprobe` pour durée/résolution réelles (actuellement hardcodé)
 
 ---
 
@@ -147,3 +160,10 @@ Le "cœur nucléaire" : découpage automatique via OCR (pas de Template Matching
 - Implémentation pipeline OCR complet : FFmpeg frames → Tesseract → déduplication
 - Suppression code mort `calibrateWithTemplates()` (vestige Template Matching)
 - Sécurité : `.env` retiré du git, token révoqué
+
+**20/03/2026** :
+- Réécriture détection : abandon Tesseract → HUD timer white pixel % (plus fiable, pas de dépendance OCR)
+- Implémentation clipping FFmpeg `-c copy` : 1 clip par VOD avec buffer 15s
+- Fix download 1080p : merge manuel video+audio avec transcodage AAC
+- Fix Windows : spawn direct pour extraction frames (fluent-ffmpeg incompatible `%05d` sur Windows)
+- Pipeline complet validé end-to-end sur 2 VODs SSBU
