@@ -2,4 +2,15 @@ $kind: http-request
 name: Add VOD
 method: POST
 url: "{{baseUrl}}/vods"
+body:
+  type: json
+  content: "{\r
+
+    \  \"setId\": \"cmmy1ivjn000112fjg7yau4nm\",\r
+
+    \  \"sourceUrl\":
+    \"https://www.youtube.com/watch?v=VleoHwibcVo&list=PLDKDzkzcr-g8MseY7I9zaOK\
+    P7S4MP5Ic3&index=33\"\r
+
+    }\r\n"
 order: 1000

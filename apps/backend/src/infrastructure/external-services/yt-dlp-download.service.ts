@@ -39,6 +39,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
         url,
         '-f', 'best[height<=720]/best', // Max 720p pour performance
         '-o', output,
+        '--no-playlist',
         '--progress',
         '--newline',
         '--no-warnings',
@@ -46,7 +47,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
         '--ffmpeg-location', 'ffmpeg', // Utilise FFmpeg système
       ];
 
-      const ytDlp = spawn('yt-dlp', args);
+      const ytDlp = spawn(process.env.YT_DLP_PATH || 'yt-dlp', args);
       
       let finalFilePath = '';
       let duration = 0;
@@ -106,7 +107,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
 
   async getVideoInfo(url: string): Promise<{ title: string; duration: number; uploader: string }> {
     return new Promise((resolve, reject) => {
-      const ytDlp = spawn('yt-dlp', [
+      const ytDlp = spawn(process.env.YT_DLP_PATH || 'yt-dlp', [
         url,
         '--print', '%(title)s',
         '--print', '%(duration)s',

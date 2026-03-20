@@ -16,7 +16,7 @@ interface StartGGSetNode {
   fullRoundText: string;
   winnerId: number | string | null;
   displayScore: string;
-  bestOf?: number;
+  totalGames?: number;
   startedAt?: number;
   completedAt?: number;
   stream?: {
@@ -74,7 +74,7 @@ export class StartGGService implements IStartGGService {
 
       return {
         name: data.name,
-        slug: data.slug,
+        slug: data.slug.replace(/^tournament\//, ''),
         startAt: new Date(data.startAt * 1000),
         endAt: new Date(data.endAt * 1000),
         startGGId: data.id.toString(),
@@ -107,17 +107,14 @@ export class StartGGService implements IStartGGService {
       const events = (eventsResponse.data?.data?.tournament?.events || []) as StartGGEvent[];
       const allSets: StartGGSetResponse[] = [];
 
-      const popularGamesKeywords = ['ultimate', 'melee', 'rivals', 'roa', 'street', 'tekken', 'guilty', 'sf6', 'strive'];
-      
-      const filteredEvents = events.filter((e) => 
+      const popularGamesKeywords = ['ultimate', 'melee', 'rivals', 'roa', 'street', 'tekken', 'guilty', 'sf6', 'strive', 'smash', 'ssbu'];
+
+      const filteredEvents = events.filter((e) =>
         popularGamesKeywords.some(keyword => e.name.toLowerCase().includes(keyword))
       );
 
-      this.logger.log(`Fetching sets for ${filteredEvents.length} filtered events (out of ${events.length})...`);
-
       for (const event of filteredEvents) {
         const sets = await this.getSetsByEventId(event.id);
-        this.logger.log(`Fetched ${sets.length} sets for event: ${event.name}`);
         allSets.push(...sets);
       }
 
@@ -138,9 +135,9 @@ export class StartGGService implements IStartGGService {
               fullRoundText
               winnerId
               displayScore
+              totalGames
               startedAt
               completedAt
-              bestOf
               stream {
                 streamName
                 streamId
@@ -164,20 +161,19 @@ export class StartGGService implements IStartGGService {
         { headers: { Authorization: `Bearer ${this.apiToken}` } }
       );
 
-      const sets = (response.data?.data?.event?.sets?.nodes || []) as StartGGSetNode[];
-      
-      // Log pour voir les données brutes de quelques sets
-      if (sets.length > 0) {
-        this.logger.log(`📊 Sample set data from Start.gg:`);
-        this.logger.log(JSON.stringify(sets.slice(0, 2), null, 2));
+      if (response.data?.errors) {
+        this.logger.error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
       }
-      
-      return sets
-        .filter((s) => s.slots && s.slots.length === 2 && s.slots[0].entrant && s.slots[1].entrant)
+
+      const sets = (response.data?.data?.event?.sets?.nodes || []) as StartGGSetNode[];
+      const filtered = sets.filter((s) => s.slots && s.slots.length === 2 && s.slots[0].entrant && s.slots[1].entrant);
+
+      return filtered.filter((s) => s.stream)
         .map((s) => ({
           id: s.id.toString(),
           roundName: s.fullRoundText,
-          bestOf: s.bestOf || 3, // Default à 3 si l'API ne renvoie rien
+          totalGames: s.totalGames,
+          streamName: s.stream?.streamName,
           winnerId: s.winnerId?.toString(),
           score: s.displayScore,
           startTime: s.startedAt ? new Date(s.startedAt * 1000).toISOString() : undefined,

@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -47,7 +48,8 @@ model Set {
   id            String      @id @default(cuid())
   tournamentId  String
   roundName     String?
-  bestOf        Int         @default(3)
+  totalGames    Int?
+  streamName    String?
   winnerId      String?
   score         String?     // Format: "2-1"
   startGGId     String?     @unique

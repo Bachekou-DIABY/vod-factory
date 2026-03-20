@@ -11,7 +11,7 @@ export class VodMapper {
       processedUrl: prismaVod.processedUrl ?? undefined,
       status: prismaVod.status as unknown as VodStatus,
       duration: prismaVod.duration ?? undefined,
-      fileSize: prismaVod.fileSize ?? undefined,
+      fileSize: prismaVod.fileSize != null ? Number(prismaVod.fileSize) : undefined,
       resolution: prismaVod.resolution ?? undefined,
       fps: prismaVod.fps ?? undefined,
       startTime: prismaVod.startTime ?? undefined,

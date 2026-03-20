@@ -3,7 +3,8 @@ import { Tournament } from '../entities/tournament.entity';
 export interface StartGGSetResponse {
   id: string;
   roundName: string;
-  bestOf: number;
+  totalGames?: number;
+  streamName?: string;
   winnerId: string;
   score: string;
   startTime?: string;  // ISO datetime

@@ -1,0 +1,3 @@
+ALTER TABLE "sets" DROP COLUMN "bestOf";
+ALTER TABLE "sets" ADD COLUMN "totalGames" INTEGER;
+ALTER TABLE "sets" ADD COLUMN "streamName" TEXT;

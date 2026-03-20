@@ -17,7 +17,7 @@ export interface Vod {
   processedUrl?: string;
   status: VodStatus;
   duration?: number;
-  fileSize?: bigint;
+  fileSize?: number;
   resolution?: string;
   fps?: number;
   startTime?: number;

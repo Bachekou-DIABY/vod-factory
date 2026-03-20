@@ -108,7 +108,7 @@ export class AddVodToTournamentUseCase {
     await this.vodRepository.update(vodId, {
       filePath: result.filePath,
       status: VodStatus.DOWNLOADED,
-      fileSize: BigInt(result.fileSize),
+      fileSize: result.fileSize,
       duration: result.duration,
       resolution: result.resolution,
     });

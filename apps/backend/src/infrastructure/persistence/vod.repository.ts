@@ -47,6 +47,7 @@ export class VodRepository implements IVodRepository {
       where: { id },
       data: {
         ...data,
+        fileSize: data.fileSize != null ? BigInt(data.fileSize) : undefined,
         status: data.status ? (data.status as unknown as PrismaVodStatus) : undefined,
       },
     });

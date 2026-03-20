@@ -2,7 +2,8 @@ export interface Set {
   id: string;
   tournamentId: string;
   roundName?: string;
-  bestOf: number;
+  totalGames?: number;
+  streamName?: string;
   winnerId?: string;
   score?: string;
   startGGId?: string;
