@@ -24,6 +24,8 @@ import { OcrGameScreenDetector } from '../infrastructure/external-services/ocr-g
 import { FfmpegVodClipper } from '../infrastructure/external-services/ffmpeg-vod-clipper.service';
 import { ClipVodUseCase } from '../application/use-cases/clip-vod.usecase';
 import { VOD_CLIPPER_TOKEN } from '../domain/interfaces/vod-clipper.interface';
+import { ClipRepository } from '../infrastructure/persistence/clip.repository';
+import { CLIP_REPOSITORY_TOKEN } from '../domain/repositories/clip.repository.interface';
 import { TournamentController } from '../infrastructure/http/tournament.controller';
 import { VodController } from '../infrastructure/http/vod.controller';
 import { TournamentVodsController } from '../infrastructure/http/tournament-vods.controller';
@@ -81,6 +83,10 @@ import { ListTournamentsController } from '../infrastructure/http/list-tournamen
     {
       provide: VOD_CLIPPER_TOKEN,
       useClass: FfmpegVodClipper,
+    },
+    {
+      provide: CLIP_REPOSITORY_TOKEN,
+      useClass: ClipRepository,
     },
     ClipVodUseCase,
   ],

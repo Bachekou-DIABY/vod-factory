@@ -5,14 +5,17 @@ import { IVodDownloadService, VOD_DOWNLOAD_SERVICE_TOKEN } from '../../domain/in
 import { VodStatus } from '../../domain/entities/vod.entity';
 
 export interface AddVodToTournamentInput {
-  setId: string;
+  setId?: string;
+  eventStartGGId?: string;
+  streamName?: string;
   sourceUrl: string;
   metadata?: Record<string, any>;
 }
 
 export interface AddVodToTournamentResult {
   id: string;
-  setId: string;
+  setId?: string;
+  eventStartGGId?: string;
   sourceUrl: string;
   status: VodStatus;
   message: string;
@@ -32,14 +35,18 @@ export class AddVodToTournamentUseCase {
   ) {}
 
   async execute(input: AddVodToTournamentInput): Promise<AddVodToTournamentResult> {
-    const { setId, sourceUrl, metadata } = input;
+    const { setId, eventStartGGId, streamName, sourceUrl, metadata } = input;
 
-    this.logger.log(`🎬 Ajout VOD au set ${setId}: ${sourceUrl}`);
+    if (!setId && !eventStartGGId) {
+      throw new Error('setId ou eventStartGGId requis');
+    }
 
-    // 1. Vérifier que le set existe
-    const set = await this.setRepository.findById(setId);
-    if (!set) {
-      throw new NotFoundException(`Set non trouvé: ${setId}`);
+    this.logger.log(`🎬 Ajout VOD (set: ${setId ?? '-'}, event: ${eventStartGGId ?? '-'}): ${sourceUrl}`);
+
+    // 1. Vérifier que le set existe si fourni
+    if (setId) {
+      const set = await this.setRepository.findById(setId);
+      if (!set) throw new NotFoundException(`Set non trouvé: ${setId}`);
     }
 
     // 2. Valider l'URL (YouTube ou Twitch)
@@ -50,8 +57,10 @@ export class AddVodToTournamentUseCase {
     // 3. Créer la VOD
     const vod = await this.vodRepository.create({
       setId,
+      eventStartGGId,
+      streamName,
       sourceUrl,
-      status: VodStatus.DOWNLOADING, // ← Changé: directement en DOWNLOADING
+      status: VodStatus.DOWNLOADING,
       metadata: {
         ...metadata,
         source: this.detectSource(sourceUrl),
@@ -69,6 +78,7 @@ export class AddVodToTournamentUseCase {
     return {
       id: vod.id,
       setId: vod.setId,
+      eventStartGGId: vod.eventStartGGId,
       sourceUrl: vod.sourceUrl,
       status: VodStatus.DOWNLOADING,
       message: 'VOD créée. Téléchargement en cours...',

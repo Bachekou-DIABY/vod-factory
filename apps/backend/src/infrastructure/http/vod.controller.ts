@@ -5,7 +5,9 @@ import { ClipVodUseCase } from '../../application/use-cases/clip-vod.usecase';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
 
 class CreateVodDto implements AddVodToTournamentInput {
-  setId!: string;
+  setId?: string;
+  eventStartGGId?: string;
+  streamName?: string;
   sourceUrl!: string;
   metadata?: Record<string, any>;
 }
@@ -24,7 +26,7 @@ export class VodController {
 
   @Post()
   async create(@Body() dto: CreateVodDto) {
-    this.logger.log(`📝 Création VOD pour set ${dto.setId}`);
+    this.logger.log(`📝 Création VOD (set: ${dto.setId ?? '-'}, event: ${dto.eventStartGGId ?? '-'})`);
     return this.addVodUseCase.execute(dto);
   }
 

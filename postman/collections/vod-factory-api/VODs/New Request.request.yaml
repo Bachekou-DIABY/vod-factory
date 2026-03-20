@@ -1,0 +1,5 @@
+$kind: http-request
+name: New Request
+url: "{{baseUrl}}/vods/cmmz4gu5a00011o0uhufls8m9/clip"
+method: POST
+order: 1435704809752571

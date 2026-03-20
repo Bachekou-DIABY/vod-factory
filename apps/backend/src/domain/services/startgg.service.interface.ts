@@ -26,17 +26,13 @@ export interface StartGGSetResponse {
 }
 
 export interface IStartGGService {
-  /**
-   * Récupère les informations d'un tournoi depuis Start.gg via son slug.
-   * Retourne les données formatées selon notre entité Tournament (sans les IDs internes).
-   */
   getTournamentBySlug(slug: string): Promise<Omit<Tournament, 'id' | 'createdAt' | 'updatedAt'> | null>;
-
-  /**
-   * Récupère la liste des matchs (sets) d'un tournoi depuis Start.gg via son ID.
-   * Retourne une liste d'objets contenant les données du set et des joueurs.
-   */
   getSetsByTournamentId(tournamentId: string): Promise<StartGGSetResponse[]>;
+  /**
+   * Récupère tous les sets streamés d'un event Start.gg, ordonnés par startedAt.
+   * Filtre optionnellement par streamName (nom du channel Twitch).
+   */
+  getStreamSetsByEventId(eventStartGGId: string, streamName?: string): Promise<StartGGSetResponse[]>;
 }
 
 export const STARTGG_SERVICE_TOKEN = 'IStartGGService';
