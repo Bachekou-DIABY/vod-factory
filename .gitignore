@@ -47,3 +47,8 @@ Thumbs.db
 .nx/workspace-data
 
 /generated/prisma
+
+# Storage (fichiers locaux, non versionnés)
+storage/vods/
+storage/clips/
+storage/frames/
