@@ -21,6 +21,9 @@ import { VOD_DOWNLOAD_SERVICE_TOKEN } from '../domain/interfaces/vod-download-se
 import { YtDlpDownloadService } from '../infrastructure/external-services/yt-dlp-download.service';
 import { StartGGService } from '../infrastructure/external-services/startgg.service';
 import { OcrGameScreenDetector } from '../infrastructure/external-services/ocr-game-screen-detector.service';
+import { FfmpegVodClipper } from '../infrastructure/external-services/ffmpeg-vod-clipper.service';
+import { ClipVodUseCase } from '../application/use-cases/clip-vod.usecase';
+import { VOD_CLIPPER_TOKEN } from '../domain/interfaces/vod-clipper.interface';
 import { TournamentController } from '../infrastructure/http/tournament.controller';
 import { VodController } from '../infrastructure/http/vod.controller';
 import { TournamentVodsController } from '../infrastructure/http/tournament-vods.controller';
@@ -75,6 +78,11 @@ import { ListTournamentsController } from '../infrastructure/http/list-tournamen
       provide: VOD_DOWNLOAD_SERVICE_TOKEN,
       useClass: YtDlpDownloadService,
     },
+    {
+      provide: VOD_CLIPPER_TOKEN,
+      useClass: FfmpegVodClipper,
+    },
+    ClipVodUseCase,
   ],
 })
 export class AppModule {}

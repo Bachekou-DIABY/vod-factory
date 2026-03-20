@@ -68,9 +68,24 @@ apps/
 ## 🗺️ Roadmap
 
 - ✅ **Phase 1** — Socle Nx/NestJS + Prisma + Docker
-- 🔄 **Phase 2** — Intégration Start.gg (GraphQL)
-- ⏳ **Phase 3** — Pipeline vidéo (BullMQ + FFmpeg + OpenCV)
-- ⏳ **Phase 4** — Dashboard frontend Angular
+- ✅ **Phase 2** — Intégration Start.gg (GraphQL)
+- ✅ **Phase 3** — Pipeline vidéo : download (yt-dlp), détection games (HUD timer OCR), clipping (FFmpeg)
+- 🔄 **Phase 4** — Robustesse & scale : tests VODs longues (10h+), workers BullMQ parallèles, upload YouTube
+- ⏳ **Phase 5** — Dashboard frontend Angular
+
+## 🎬 Pipeline VOD (Phase 3)
+
+```
+POST /api/vods              → Enregistre une VOD (URL + setId)
+POST /api/vods/:id/analyze  → Détecte les games via présence du HUD timer (1fps, zone top-right)
+POST /api/vods/:id/clip     → Génère le clip (firstSTART-15s → lastEND+15s) avec FFmpeg -c copy
+```
+
+**Détection SSBU** — state machine sur le % de pixels blancs dans la zone timer :
+- `timerVisibleThreshold = 3%` — HUD présent = game en cours
+- `minGameDurationSeconds = 90` — filtre les faux positifs courts
+- `cooldownAfterEndSeconds = 25` — évite les faux STARTs sur l'écran résultats
+- `consecutiveTimerAbsent >= 3` — ignore les kill screens (~1-2s)
 
 ## Scripts
 

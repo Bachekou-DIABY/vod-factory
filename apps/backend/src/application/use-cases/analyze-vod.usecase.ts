@@ -53,8 +53,15 @@ export class AnalyzeVodUseCase {
       `✅ Analyse terminée: ${events.length} événements, ${gamesDetected} games détectés en ${duration.toFixed(1)}s`
     );
 
-    // 4. TODO: Mettre à jour la VOD avec les segments détectés
-    // await this.vodRepository.updateSegments(vodId, events);
+    // 4. Persister startTime/endTime (premier START, dernier END)
+    const firstStart = events.find(e => e.type === 'START');
+    const lastEnd = [...events].reverse().find(e => e.type === 'END');
+    if (firstStart && lastEnd) {
+      await this.vodRepository.update(vodId, {
+        startTime: firstStart.timestamp,
+        endTime: lastEnd.timestamp,
+      });
+    }
 
     return {
       vodId,

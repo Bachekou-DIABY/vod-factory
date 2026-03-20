@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import ffmpeg from 'fluent-ffmpeg';
+import { spawn } from 'child_process';
 import Jimp from 'jimp';
 import {
   GameScreenEvent,
@@ -142,12 +142,24 @@ export class OcrGameScreenDetector implements IGameScreenDetector {
 
   private extractFrames(videoPath: string, outputDir: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      ffmpeg(videoPath)
-        .outputOptions(['-vf', 'fps=1', '-q:v', '2'])
-        .output(path.join(outputDir, 'frame_%05d.jpg'))
-        .on('end', () => resolve())
-        .on('error', (err: Error) => reject(new Error(`FFmpeg error: ${err.message}`)))
-        .run();
+      const outputPattern = path.join(outputDir, 'frame_%05d.jpg');
+      const args = [
+        '-i', videoPath,
+        '-vf', 'fps=1',
+        '-q:v', '2',
+        outputPattern,
+      ];
+
+      const proc = spawn('ffmpeg', args);
+
+      proc.stderr.on('data', (data) => {
+        this.logger.debug(`ffmpeg: ${data.toString().trim()}`);
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`FFmpeg exited with code ${code}`));
+      });
     });
   }
 

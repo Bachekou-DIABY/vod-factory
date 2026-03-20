@@ -1,6 +1,7 @@
 import { Controller, Post, Body, Get, Param, Inject, Logger } from '@nestjs/common';
 import { AddVodToTournamentUseCase, AddVodToTournamentInput } from '../../application/use-cases/add-vod-to-tournament.usecase';
 import { AnalyzeVodUseCase } from '../../application/use-cases/analyze-vod.usecase';
+import { ClipVodUseCase } from '../../application/use-cases/clip-vod.usecase';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
 
 class CreateVodDto implements AddVodToTournamentInput {
@@ -16,6 +17,7 @@ export class VodController {
   constructor(
     private readonly addVodUseCase: AddVodToTournamentUseCase,
     private readonly analyzeVodUseCase: AnalyzeVodUseCase,
+    private readonly clipVodUseCase: ClipVodUseCase,
     @Inject(VOD_REPOSITORY_TOKEN)
     private readonly vodRepository: IVodRepository
   ) {}
@@ -40,5 +42,11 @@ export class VodController {
   async analyze(@Param('id') id: string) {
     this.logger.log(`🔬 Analyse VOD ${id}`);
     return this.analyzeVodUseCase.execute(id);
+  }
+
+  @Post(':id/clip')
+  async clip(@Param('id') id: string) {
+    this.logger.log(`✂️ Clipping VOD ${id}`);
+    return this.clipVodUseCase.execute(id);
   }
 }

@@ -34,41 +34,27 @@ export class YtDlpDownloadService implements IVodDownloadService {
     this.logger.log(`📂 Destination: ${output}`);
 
     return new Promise((resolve, reject) => {
-      // yt-dlp args: format 720p pour analyse rapide, pas besoin de 4K
       const args = [
         url,
-        '-f', 'best[height<=720]/best', // Max 720p pour performance
+        '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
         '-o', output,
         '--no-playlist',
         '--progress',
         '--newline',
         '--no-warnings',
         '--no-call-home',
-        '--ffmpeg-location', 'ffmpeg', // Utilise FFmpeg système
+        '--ffmpeg-location', 'ffmpeg',
+        '--merge-output-format', 'mp4',
       ];
 
       const ytDlp = spawn(process.env.YT_DLP_PATH || 'yt-dlp', args);
       
-      let finalFilePath = '';
-      let duration = 0;
-      let resolution = '';
-      let fps = 30;
-
       ytDlp.stdout.on('data', (data) => {
         const line = data.toString();
-        
-        // Parse progress
         if (line.includes('[download]') && onProgress) {
           const progress = this.parseProgress(line);
           if (progress) onProgress(progress);
         }
-        
-        // Parse destination finale
-        if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) {
-          const match = line.match(/Merging formats into "(.+)"/);
-          if (match) finalFilePath = match[1];
-        }
-        
         this.logger.debug(line.trim());
       });
 
@@ -76,30 +62,39 @@ export class YtDlpDownloadService implements IVodDownloadService {
         this.logger.warn(`yt-dlp: ${data.toString().trim()}`);
       });
 
-      ytDlp.on('close', (code) => {
-        if (code === 0) {
-          // Récupérer le fichier téléchargé (yt-dlp remplace le template)
-          const downloadedFile = this.findDownloadedFile(output);
-          
+      ytDlp.on('close', async (code) => {
+        if (code !== 0) {
+          reject(new Error(`yt-dlp exited with code ${code}`));
+          return;
+        }
+
+        try {
+          // Cherche un fichier mergé (sans format ID)
+          let downloadedFile = this.findDownloadedFile(output);
+
+          // Si pas de fichier mergé, merger manuellement video + audio
+          if (!downloadedFile) {
+            this.logger.warn('⚠️ Pas de fichier mergé trouvé, tentative de merge manuel...');
+            downloadedFile = await this.mergeStreams(output);
+          }
+
           if (!downloadedFile) {
             reject(new Error('Fichier téléchargé non trouvé'));
             return;
           }
 
           const stats = fs.statSync(downloadedFile);
-          
-          // TODO: Extraire vraie durée/résolution avec ffprobe
           this.logger.log(`✅ Téléchargé: ${path.basename(downloadedFile)} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`);
-          
+
           resolve({
             filePath: downloadedFile,
             fileSize: stats.size,
-            duration: 0, // Sera extrait avec ffprobe
-            resolution: '720p',
+            duration: 0,
+            resolution: '1080p',
             fps: 30,
           });
-        } else {
-          reject(new Error(`yt-dlp exited with code ${code}`));
+        } catch (err) {
+          reject(err);
         }
       });
     });
@@ -150,13 +145,64 @@ export class YtDlpDownloadService implements IVodDownloadService {
     return null;
   }
 
+  private mergeStreams(outputTemplate: string): Promise<string> {
+    const dir = path.dirname(outputTemplate);
+    const files = fs.readdirSync(dir);
+    const ytDlpFormatId = /\.f\d+\.\w+$/;
+
+    // Trouver les fichiers video et audio séparés
+    const formatFiles = files.filter(f => f.startsWith('vod_') && ytDlpFormatId.test(f));
+    const videoFile = formatFiles.find(f => f.endsWith('.mp4') || f.endsWith('.webm') && !f.includes('f251'));
+    const audioFile = formatFiles.find(f => f.includes('f251') || f.endsWith('.m4a') || f.endsWith('.opus'));
+
+    if (!videoFile || !audioFile) {
+      throw new Error(`Streams introuvables pour le merge: ${formatFiles.join(', ')}`);
+    }
+
+    // Extraire le timestamp du nom pour nommer le fichier mergé
+    const tsMatch = videoFile.match(/^vod_(\d+)_/);
+    const ts = tsMatch ? tsMatch[1] : Date.now().toString();
+    const outputPath = path.join(dir, `vod_${ts}_merged.mp4`);
+
+    this.logger.log(`🔀 Merge: ${videoFile} + ${audioFile} → ${path.basename(outputPath)}`);
+
+    return new Promise((resolve, reject) => {
+      const proc = spawn('ffmpeg', [
+        '-i', path.join(dir, videoFile),
+        '-i', path.join(dir, audioFile),
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-y',
+        outputPath,
+      ]);
+
+      proc.stderr.on('data', (data) => this.logger.debug(`ffmpeg merge: ${data.toString().trim()}`));
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          // Nettoyer les fichiers séparés
+          fs.unlinkSync(path.join(dir, videoFile));
+          fs.unlinkSync(path.join(dir, audioFile));
+          this.logger.log(`✅ Merge terminé: ${path.basename(outputPath)}`);
+          resolve(outputPath);
+        } else {
+          reject(new Error(`ffmpeg merge exited with code ${code}`));
+        }
+      });
+    });
+  }
+
   private findDownloadedFile(outputTemplate: string): string | null {
     const dir = path.dirname(outputTemplate);
     const files = fs.readdirSync(dir);
     
     // Cherche le fichier le plus récent qui correspond au pattern
+    const videoExtensions = ['.mp4', '.mkv', '.webm', '.mov', '.avi'];
+    // Exclure les fichiers avec format ID yt-dlp (ex: .f251.webm, .f137.mp4 = streams séparés non mergés)
+    const ytDlpFormatId = /\.f\d+\.\w+$/;
     const vodFiles = files
-      .filter(f => f.startsWith('vod_'))
+      .filter(f => f.startsWith('vod_') && videoExtensions.some(ext => f.endsWith(ext)) && !ytDlpFormatId.test(f))
       .map(f => ({
         name: f,
         path: path.join(dir, f),
