@@ -3,6 +3,7 @@ import { AddVodToTournamentUseCase, AddVodToTournamentInput } from '../../applic
 import { AnalyzeVodUseCase } from '../../application/use-cases/analyze-vod.usecase';
 import { ClipVodUseCase } from '../../application/use-cases/clip-vod.usecase';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
+import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositories/clip.repository.interface';
 
 class CreateVodDto implements AddVodToTournamentInput {
   setId?: string;
@@ -21,7 +22,9 @@ export class VodController {
     private readonly analyzeVodUseCase: AnalyzeVodUseCase,
     private readonly clipVodUseCase: ClipVodUseCase,
     @Inject(VOD_REPOSITORY_TOKEN)
-    private readonly vodRepository: IVodRepository
+    private readonly vodRepository: IVodRepository,
+    @Inject(CLIP_REPOSITORY_TOKEN)
+    private readonly clipRepository: IClipRepository,
   ) {}
 
   @Post()
@@ -50,5 +53,10 @@ export class VodController {
   async clip(@Param('id') id: string) {
     this.logger.log(`✂️ Clipping VOD ${id}`);
     return this.clipVodUseCase.execute(id);
+  }
+
+  @Get(':id/clips')
+  async getClips(@Param('id') id: string) {
+    return this.clipRepository.findByVodId(id);
   }
 }

@@ -10,11 +10,14 @@ export class VodRepository implements IVodRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(vod: Omit<Vod, 'id' | 'createdAt' | 'updatedAt'>): Promise<Vod> {
+    const { setId, events, ...rest } = vod;
     const created = await this.prisma.vod.create({
       data: {
-        ...vod,
+        ...rest,
+        setId: setId ?? null,
+        events: events ? (events as any) : undefined,
         status: vod.status as unknown as PrismaVodStatus,
-      },
+      } as any,
     });
     return VodMapper.toDomain(created);
   }

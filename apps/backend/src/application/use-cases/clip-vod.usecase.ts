@@ -1,4 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import * as path from 'path';
 import * as fs from 'fs';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
@@ -7,6 +9,8 @@ import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositorie
 import { IStartGGService, STARTGG_SERVICE_TOKEN } from '../../domain/services/startgg.service.interface';
 import { VodStatus } from '../../domain/entities/vod.entity';
 import { GameScreenEvent } from '../../domain/interfaces/game-screen-detector.interface';
+import { VOD_PROCESSING_QUEUE } from '../../app/app.module';
+import { ClipSetJobData } from '../../infrastructure/queues/clip-set.processor';
 
 export interface ClipResult {
   setOrder: number;
@@ -36,6 +40,8 @@ export class ClipVodUseCase {
     private readonly clipRepository: IClipRepository,
     @Inject(STARTGG_SERVICE_TOKEN)
     private readonly startGGService: IStartGGService,
+    @InjectQueue(VOD_PROCESSING_QUEUE)
+    private readonly queue: Queue,
   ) {}
 
   async execute(vodId: string): Promise<ClipVodResult> {
@@ -75,7 +81,7 @@ export class ClipVodUseCase {
 
     this.logger.log(`📋 ${sets.length} sets trouvés sur Start.gg pour l'event ${vod.eventStartGGId}`);
 
-    const clips: ClipResult[] = [];
+    const jobs: ClipSetJobData[] = [];
     let gameIndex = 0;
 
     for (let i = 0; i < sets.length; i++) {
@@ -95,42 +101,37 @@ export class ClipVodUseCase {
 
       gameIndex += gameCount;
 
-      const startSeconds = Math.max(0, setGames[0].start - this.bufferSeconds);
-      const endSeconds = setGames[setGames.length - 1].end + this.bufferSeconds;
-      const outputPath = path.join(clipsDir, `${vod.id}_set_${i + 1}.mp4`);
-
-      this.logger.log(`✂️ Set ${i + 1} (${set.roundName}): [${startSeconds}s → ${endSeconds}s] (${setGames.length} games)`);
-
-      const result = await this.clipper.clip({
-        inputPath: vod.filePath,
-        outputPath,
-        startSeconds,
-        endSeconds,
-      });
-
-      await this.clipRepository.create({
+      jobs.push({
         vodId: vod.id,
         setOrder: i + 1,
         setStartGGId: set.id,
-        filePath: result.outputPath,
-        startSeconds,
-        endSeconds,
-      });
-
-      clips.push({
-        setOrder: i + 1,
-        setStartGGId: set.id,
-        clipPath: result.outputPath,
-        startSeconds,
-        endSeconds,
-        fileSize: result.fileSize,
+        inputPath: vod.filePath,
+        outputPath: path.join(clipsDir, `${vod.id}_set_${i + 1}.mp4`),
+        startSeconds: Math.max(0, setGames[0].start - this.bufferSeconds),
+        endSeconds: setGames[setGames.length - 1].end + this.bufferSeconds,
+        totalSets: sets.length,
       });
     }
 
-    await this.vodRepository.update(vod.id, { status: VodStatus.COMPLETED });
-    this.logger.log(`✅ ${clips.length} clips générés pour VOD ${vod.id}`);
+    // Publier tous les jobs en parallèle
+    await Promise.all(
+      jobs.map((data) => this.queue.add('clip-set', data))
+    );
 
-    return { vodId: vod.id, clips };
+    await this.vodRepository.update(vod.id, { status: VodStatus.PROCESSING });
+    this.logger.log(`🚀 ${jobs.length} jobs clip-set publiés pour VOD ${vod.id}`);
+
+    return {
+      vodId: vod.id,
+      clips: jobs.map((j) => ({
+        setOrder: j.setOrder,
+        setStartGGId: j.setStartGGId,
+        clipPath: j.outputPath,
+        startSeconds: j.startSeconds,
+        endSeconds: j.endSeconds,
+        fileSize: 0, // sera rempli par le worker
+      })),
+    };
   }
 
   private async clipSingleVod(

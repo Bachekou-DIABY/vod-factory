@@ -5,15 +5,17 @@ import { IClipRepository } from '../../domain/repositories/clip.repository.inter
 
 @Injectable()
 export class ClipRepository implements IClipRepository {
+  private get db(): any { return this.prisma; }
+
   constructor(private readonly prisma: PrismaService) {}
 
   async create(clip: Omit<Clip, 'id' | 'createdAt' | 'updatedAt'>): Promise<Clip> {
-    const created = await this.prisma.clip.create({ data: clip });
+    const created = await this.db.clip.create({ data: clip });
     return this.toDomain(created);
   }
 
   async findByVodId(vodId: string): Promise<Clip[]> {
-    const clips = await this.prisma.clip.findMany({
+    const clips = await this.db.clip.findMany({
       where: { vodId },
       orderBy: { setOrder: 'asc' },
     });
@@ -21,7 +23,7 @@ export class ClipRepository implements IClipRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await this.prisma.clip.delete({ where: { id } });
+    await this.db.clip.delete({ where: { id } });
   }
 
   private toDomain(prismaClip: any): Clip {

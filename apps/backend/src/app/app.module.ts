@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaService } from '../infrastructure/persistence/prisma.service';
@@ -31,6 +32,8 @@ import { VodController } from '../infrastructure/http/vod.controller';
 import { TournamentVodsController } from '../infrastructure/http/tournament-vods.controller';
 import { TournamentSetsController } from '../infrastructure/http/tournament-sets.controller';
 import { ListTournamentsController } from '../infrastructure/http/list-tournaments.controller';
+import { ClipSetProcessor } from '../infrastructure/queues/clip-set.processor';
+export const VOD_PROCESSING_QUEUE = 'vod-processing';
 
 @Module({
   imports: [
@@ -38,6 +41,13 @@ import { ListTournamentsController } from '../infrastructure/http/list-tournamen
       isGlobal: true,
       envFilePath: ['.env', '.env.local'],
     }),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+      },
+    }),
+    BullModule.registerQueue({ name: VOD_PROCESSING_QUEUE }),
   ],
   controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController],
   providers: [
@@ -89,6 +99,7 @@ import { ListTournamentsController } from '../infrastructure/http/list-tournamen
       useClass: ClipRepository,
     },
     ClipVodUseCase,
+    ClipSetProcessor,
   ],
 })
 export class AppModule {}
