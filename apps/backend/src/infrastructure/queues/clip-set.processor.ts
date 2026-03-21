@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { VOD_PROCESSING_QUEUE } from '../../app/app.module';
+import { CLIP_SET_QUEUE, CLIP_SET_JOB } from './queue.constants';
 import { IVodClipper, VOD_CLIPPER_TOKEN } from '../../domain/interfaces/vod-clipper.interface';
 import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositories/clip.repository.interface';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
@@ -18,7 +18,7 @@ export interface ClipSetJobData {
   totalSets: number;
 }
 
-@Processor({ name: VOD_PROCESSING_QUEUE, workerOptions: { concurrency: 4 } } as any)
+@Processor(CLIP_SET_QUEUE, { concurrency: 4 })
 export class ClipSetProcessor extends WorkerHost {
   private readonly logger = new Logger(ClipSetProcessor.name);
 
@@ -34,7 +34,7 @@ export class ClipSetProcessor extends WorkerHost {
   }
 
   async process(job: Job): Promise<any> {
-    if (job.name === 'clip-set') {
+    if (job.name === CLIP_SET_JOB) {
       return this.processClipSet(job as Job<ClipSetJobData>);
     }
   }

@@ -4,4 +4,4 @@ method: POST
 url: "{{baseUrl}}/tournaments/import/:slug"
 pathVariables:
   slug: le-parthenon-6
-order: 2000
+order: 4000

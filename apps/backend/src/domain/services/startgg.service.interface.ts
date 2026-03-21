@@ -25,9 +25,15 @@ export interface StartGGSetResponse {
   };
 }
 
+export interface StartGGEventResponse {
+  id: string;
+  name: string;
+}
+
 export interface IStartGGService {
   getTournamentBySlug(slug: string): Promise<Omit<Tournament, 'id' | 'createdAt' | 'updatedAt'> | null>;
   getSetsByTournamentId(tournamentId: string): Promise<StartGGSetResponse[]>;
+  getEventsByTournamentId(startGGTournamentId: string): Promise<StartGGEventResponse[]>;
   /**
    * Récupère tous les sets streamés d'un event Start.gg, ordonnés par startedAt.
    * Filtre optionnellement par streamName (nom du channel Twitch).

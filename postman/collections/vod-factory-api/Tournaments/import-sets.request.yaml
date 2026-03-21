@@ -3,5 +3,5 @@ name: Import Sets
 method: POST
 url: "{{baseUrl}}/tournaments/import-sets/:id"
 pathVariables:
-  id: cmmy1f2zy0000n4xckokhwra9
-order: 3000
+  id: cmmzbj56t0000hdadyi5ot1hc
+order: 5000

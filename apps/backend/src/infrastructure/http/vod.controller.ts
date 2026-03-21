@@ -55,6 +55,12 @@ export class VodController {
     return this.clipVodUseCase.execute(id);
   }
 
+  @Get(':id/clip-plan')
+  async getClipPlan(@Param('id') id: string) {
+    this.logger.log(`📋 Clip plan VOD ${id}`);
+    return this.clipVodUseCase.getClipPlan(id);
+  }
+
   @Get(':id/clips')
   async getClips(@Param('id') id: string) {
     return this.clipRepository.findByVodId(id);

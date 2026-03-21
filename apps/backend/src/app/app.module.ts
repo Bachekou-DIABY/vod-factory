@@ -33,7 +33,10 @@ import { TournamentVodsController } from '../infrastructure/http/tournament-vods
 import { TournamentSetsController } from '../infrastructure/http/tournament-sets.controller';
 import { ListTournamentsController } from '../infrastructure/http/list-tournaments.controller';
 import { ClipSetProcessor } from '../infrastructure/queues/clip-set.processor';
-export const VOD_PROCESSING_QUEUE = 'vod-processing';
+import { AnalyzeChunkProcessor } from '../infrastructure/queues/analyze-chunk.processor';
+import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE } from '../infrastructure/queues/queue.constants';
+export { VOD_PROCESSING_QUEUE };
+
 
 @Module({
   imports: [
@@ -48,6 +51,7 @@ export const VOD_PROCESSING_QUEUE = 'vod-processing';
       },
     }),
     BullModule.registerQueue({ name: VOD_PROCESSING_QUEUE }),
+    BullModule.registerQueue({ name: CLIP_SET_QUEUE }),
   ],
   controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController],
   providers: [
@@ -100,6 +104,7 @@ export const VOD_PROCESSING_QUEUE = 'vod-processing';
     },
     ClipVodUseCase,
     ClipSetProcessor,
+    AnalyzeChunkProcessor,
   ],
 })
 export class AppModule {}

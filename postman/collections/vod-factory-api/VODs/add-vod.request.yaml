@@ -8,7 +8,9 @@ body:
 
     \  \"sourceUrl\": \"https://www.twitch.tv/videos/2721979417\",\r
 
-    \  \"setId\": \"cmmy1ivjn000112fjg7yau4nm\"\r
+    \  \"eventStartGGId\": \"1534674\",\r
+
+    \  \"streamName\": \"smashalezmtp\"\r
 
     }"
 order: 1000

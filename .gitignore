@@ -52,3 +52,5 @@ Thumbs.db
 storage/vods/
 storage/clips/
 storage/frames/
+.tesseract-cache/
+context.md

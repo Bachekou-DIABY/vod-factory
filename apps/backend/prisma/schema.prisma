@@ -85,32 +85,59 @@ model Vod {
   fps            Int?      // Frames per second
   startTime      Int?      // Start time in seconds from original VOD
   endTime        Int?      // End time in seconds from original VOD
-  events         Json?     // Array of GameScreenEvent détectés
+  events         Json?     // Array of GameScreenEvent détectés (final, après merge)
+  totalChunks    Int?      // Nombre de chunks d'analyse
+  completedChunks Int?     @default(0)
   metadata       Json?     // Additional metadata (stream info, etc.)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   // Relations
-  set            Set?      @relation(fields: [setId], references: [id], onDelete: SetNull)
+  set            Set?           @relation(fields: [setId], references: [id], onDelete: SetNull)
   clips          Clip[]
+  chunkEvents    VodChunkEvent[]
 
   @@map("vods")
 }
 
+model VodChunkEvent {
+  id         String @id @default(cuid())
+  vodId      String
+  chunkIndex Int
+  events     Json   // GameScreenEvent[] pour ce chunk
+  vod        Vod    @relation(fields: [vodId], references: [id], onDelete: Cascade)
+
+  @@unique([vodId, chunkIndex])
+  @@map("vod_chunk_events")
+}
+
 model Clip {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   vodId        String
-  setOrder     Int      // Position du set dans la VOD (1-based)
-  setStartGGId String?  // Start.gg ID du set
+  setOrder     Int        // Position du set dans la VOD (1-based)
+  setStartGGId String?    // Start.gg ID du set
   filePath     String
   startSeconds Int
   endSeconds   Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  title        String?    // Titre éditable (ex: "Grand Final — Seidokan vs Ironsup")
+  roundName    String?    // Round (ex: "Winners Semi-Final")
+  players      String?    // "Player1 vs Player2"
+  score        String?    // "3 - 1"
+  status       ClipStatus @default(PENDING)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  vod          Vod      @relation(fields: [vodId], references: [id], onDelete: Cascade)
+  vod          Vod        @relation(fields: [vodId], references: [id], onDelete: Cascade)
 
   @@map("clips")
+}
+
+enum ClipStatus {
+  PENDING    // Auto-cut, pas encore reviewé
+  APPROVED   // Validé par l'utilisateur, prêt pour upload
+  UPLOADING  // En cours d'upload YouTube
+  UPLOADED   // Uploadé avec succès
+  FAILED     // Erreur d'upload
 }
 
 enum VodStatus {

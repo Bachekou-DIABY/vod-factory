@@ -4,4 +4,4 @@ method: GET
 url: "{{baseUrl}}/tournaments/:slug"
 pathVariables:
   slug: tournament/la-suite-7
-order: 1500
+order: 2000

@@ -10,5 +10,5 @@ export interface GameScreenEvent {
 }
 
 export interface IGameScreenDetector {
-  detectEvents(videoPath: string): Promise<GameScreenEvent[]>;
+  detectEvents(videoPath: string, startSeconds?: number, endSeconds?: number): Promise<GameScreenEvent[]>;
 }

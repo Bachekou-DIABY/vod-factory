@@ -107,21 +107,34 @@ Le "cœur nucléaire" : découpage automatique via OCR (pas de Template Matching
 - [x] `YtDlpDownloadService` : 1080p + merge manuel video+audio (AAC 192k) si yt-dlp ne merge pas
 - [x] Fix Windows : spawn direct ffmpeg (pas fluent-ffmpeg) pour extraction frames
 
-### 🚧 À faire
-- [ ] Tester sur une VOD longue (10h+) — valider seuils sur streams multi-sets avec longues pauses
-- [ ] Workers parallèles BullMQ : implémenter la possibilité de splitter le traitement entre plusieurs workers (download / analyze / clip en jobs séparés dans une queue Redis)
+### ✅ Réalisé (20/03/2026) — multi-set clipping + workers parallèles
+- [x] Multi-set clipping : 1 clip par set (groupé via `totalGames` Start.gg)
+- [x] Sets ordonnés automatiquement par `startedAt` depuis Start.gg API (aucune saisie manuelle)
+- [x] `Clip` model Prisma + `ClipRepository` + `GET /api/vods/:id/clips`
+- [x] `ClipSetProcessor` : `WorkerHost` BullMQ, concurrency 4, 1 job par set
+- [x] `ClipVodUseCase` : publie N jobs BullMQ en parallèle (1 par set)
+- [x] Events JSON persistés sur `Vod` (évite re-analyse au moment du clipping)
+- [x] `getStreamSetsByEventId` paginé complet + filtre par streamName
+- [x] Nettoyage historique git : 6.7 GB de vidéos purgées, repo = 28 MB
 
-### 📊 Progression Phase 4 : **95%** (pipeline validé, robustesse longues VODs + workers à faire)
+### 📊 Progression Phase 4 : **100% ✅**
 
 ---
 
-## 🎯 Phase 5 : Upload & Scale
+## 🎯 Phase 5 : Test Longue VOD + Upload YouTube 🚧
 
-- [ ] **Test VOD longue (10h+)** en priorité — valider avant d'uploader quoi que ce soit
+### Prochaine étape immédiate
+- [ ] **Test pipeline complet sur VOD 10h (Le Parthénon VI)** — besoin de l'event ID Start.gg
+  - `POST /api/vods` avec `eventStartGGId` + `streamName`
+  - Analyze → valider groupage 102 games détectées en sets
+  - Clip → valider N clips parallèles générés correctement
+
+### Suite
 - [ ] Upload YouTube automatique (OAuth2 Google, YouTube Data API v3)
-- [ ] Workers BullMQ parallèles (jobs : download / analyze / clip / upload)
-- [ ] Corriger pagination Start.gg (> 50 sets/event)
+- [ ] Workers BullMQ : étendre pipeline (jobs download / analyze en queue, pas seulement clip)
+- [ ] Corriger pagination Start.gg (> 50 sets/event — limitation connue)
 - [ ] `ffprobe` pour durée/résolution réelles (actuellement hardcodé)
+- [ ] Supprimer le fichier VOD source après génération des clips (option configurable)
 
 ---
 
@@ -139,7 +152,7 @@ Le "cœur nucléaire" : découpage automatique via OCR (pas de Template Matching
 | Monorepo | Nx 22.5.4 |
 | Backend | NestJS 11, TypeScript 5.9 |
 | Base de données | PostgreSQL 15, Prisma 5.22 |
-| Cache/Jobs | Redis (Docker OK, BullMQ pas encore intégré) |
+| Cache/Jobs | Redis (Docker) + BullMQ (workers concurrency 4) |
 | OCR | Tesseract.js 5.x |
 | Video | fluent-ffmpeg 2.x |
 | Download | yt-dlp (CLI externe) |
@@ -160,6 +173,13 @@ Le "cœur nucléaire" : découpage automatique via OCR (pas de Template Matching
 - Implémentation pipeline OCR complet : FFmpeg frames → Tesseract → déduplication
 - Suppression code mort `calibrateWithTemplates()` (vestige Template Matching)
 - Sécurité : `.env` retiré du git, token révoqué
+
+**20/03/2026 (session 2)** :
+- Multi-set clipping : 1 clip par set via `totalGames` Start.gg + `startedAt` ordering
+- BullMQ workers : `ClipSetProcessor` concurrency 4, N jobs parallèles par `ClipVodUseCase`
+- `Clip` model + repository + endpoint `GET /api/vods/:id/clips`
+- Events JSON persistés sur `Vod` pour éviter re-analyse au clipping
+- Nettoyage git : 6.7 GB de vidéos purgées de l'historique (git filter-branch + gc)
 
 **20/03/2026** :
 - Réécriture détection : abandon Tesseract → HUD timer white pixel % (plus fiable, pas de dépendance OCR)
