@@ -8,6 +8,7 @@ export class VodMapper {
       setId: prismaVod.setId ?? undefined,
       eventStartGGId: (prismaVod as any).eventStartGGId ?? undefined,
       streamName: (prismaVod as any).streamName ?? undefined,
+      tournamentId: (prismaVod as any).tournamentId ?? undefined,
       sourceUrl: prismaVod.sourceUrl,
       filePath: prismaVod.filePath ?? undefined,
       processedUrl: prismaVod.processedUrl ?? undefined,

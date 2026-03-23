@@ -3,5 +3,5 @@ name: Get Tournament Sets
 method: GET
 url: "{{baseUrl}}/tournaments/:id/sets"
 pathVariables:
-  id: cmmy0hqer0000956pb7bpax8a
+  id: cmmzbj56t0000hdadyi5ot1hc
 order: 6000

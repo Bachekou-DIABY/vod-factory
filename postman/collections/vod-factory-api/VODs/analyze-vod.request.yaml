@@ -3,5 +3,5 @@ name: Analyze VOD (OCR)
 method: POST
 url: "{{baseUrl}}/vods/:id/analyze"
 pathVariables:
-  id: cmmz4gu5a00011o0uhufls8m9
+  id: cmmzbj56t0000hdadyi5ot1hc
 order: 3000

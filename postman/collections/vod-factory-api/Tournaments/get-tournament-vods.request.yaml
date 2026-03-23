@@ -3,5 +3,5 @@ name: Get Tournament VODs
 method: GET
 url: "{{baseUrl}}/tournaments/:id/vods"
 pathVariables:
-  id: TOURNAMENT_ID
+  id: ""
 order: 7000

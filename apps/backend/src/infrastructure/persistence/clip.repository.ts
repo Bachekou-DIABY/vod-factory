@@ -22,6 +22,19 @@ export class ClipRepository implements IClipRepository {
     return clips.map(this.toDomain);
   }
 
+  async findById(id: string): Promise<Clip | null> {
+    const clip = await this.db.clip.findUnique({ where: { id } });
+    return clip ? this.toDomain(clip) : null;
+  }
+
+  async update(
+    id: string,
+    data: Partial<Pick<Clip, 'startSeconds' | 'endSeconds' | 'title' | 'roundName' | 'players' | 'score' | 'status' | 'filePath'>>,
+  ): Promise<Clip> {
+    const updated = await this.db.clip.update({ where: { id }, data });
+    return this.toDomain(updated);
+  }
+
   async delete(id: string): Promise<void> {
     await this.db.clip.delete({ where: { id } });
   }
@@ -35,6 +48,11 @@ export class ClipRepository implements IClipRepository {
       filePath: prismaClip.filePath,
       startSeconds: prismaClip.startSeconds,
       endSeconds: prismaClip.endSeconds,
+      title: prismaClip.title ?? undefined,
+      roundName: prismaClip.roundName ?? undefined,
+      players: prismaClip.players ?? undefined,
+      score: prismaClip.score ?? undefined,
+      status: prismaClip.status,
       createdAt: prismaClip.createdAt,
       updatedAt: prismaClip.updatedAt,
     };

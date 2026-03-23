@@ -8,6 +8,7 @@ export interface AddVodToTournamentInput {
   setId?: string;
   eventStartGGId?: string;
   streamName?: string;
+  tournamentId?: string;
   sourceUrl: string;
   metadata?: Record<string, any>;
 }
@@ -35,10 +36,10 @@ export class AddVodToTournamentUseCase {
   ) {}
 
   async execute(input: AddVodToTournamentInput): Promise<AddVodToTournamentResult> {
-    const { setId, eventStartGGId, streamName, sourceUrl, metadata } = input;
+    const { setId, eventStartGGId, streamName, tournamentId, sourceUrl, metadata } = input;
 
-    if (!setId && !eventStartGGId) {
-      throw new Error('setId ou eventStartGGId requis');
+    if (!setId && !eventStartGGId && !tournamentId) {
+      throw new Error('setId, eventStartGGId ou tournamentId requis');
     }
 
     this.logger.log(`🎬 Ajout VOD (set: ${setId ?? '-'}, event: ${eventStartGGId ?? '-'}): ${sourceUrl}`);
@@ -59,6 +60,7 @@ export class AddVodToTournamentUseCase {
       setId,
       eventStartGGId,
       streamName,
+      tournamentId,
       sourceUrl,
       status: VodStatus.DOWNLOADING,
       metadata: {

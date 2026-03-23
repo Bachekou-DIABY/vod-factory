@@ -1,4 +1,7 @@
-import { Controller, Post, Body, Get, Param, Inject, Logger } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Get, Param, Inject, Logger, Res, NotFoundException } from '@nestjs/common';
+import { Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AddVodToTournamentUseCase, AddVodToTournamentInput } from '../../application/use-cases/add-vod-to-tournament.usecase';
 import { AnalyzeVodUseCase } from '../../application/use-cases/analyze-vod.usecase';
 import { ClipVodUseCase } from '../../application/use-cases/clip-vod.usecase';
@@ -9,6 +12,7 @@ class CreateVodDto implements AddVodToTournamentInput {
   setId?: string;
   eventStartGGId?: string;
   streamName?: string;
+  tournamentId?: string;
   sourceUrl!: string;
   metadata?: Record<string, any>;
 }
@@ -43,6 +47,12 @@ export class VodController {
     return vod;
   }
 
+  @Patch(':id')
+  async update(@Param('id') id: string, @Body() dto: Partial<CreateVodDto>) {
+    this.logger.log(`✏️ Mise à jour VOD ${id}`);
+    return this.vodRepository.update(id, dto as any);
+  }
+
   @Post(':id/analyze')
   async analyze(@Param('id') id: string) {
     this.logger.log(`🔬 Analyse VOD ${id}`);
@@ -64,5 +74,24 @@ export class VodController {
   @Get(':id/clips')
   async getClips(@Param('id') id: string) {
     return this.clipRepository.findByVodId(id);
+  }
+
+  @Get(':id/stream')
+  async stream(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const vod = await this.vodRepository.findById(id);
+    if (!vod?.filePath || !fs.existsSync(vod.filePath)) {
+      res.status(404).json({ message: 'Fichier VOD non trouvé' });
+      return;
+    }
+
+    const filePath = path.resolve(vod.filePath);
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        this.logger.error(`Erreur streaming VOD ${id}: ${err.message}`);
+      }
+    });
   }
 }

@@ -5,12 +5,9 @@ url: "{{baseUrl}}/vods"
 body:
   type: json
   content: "{\r
-
-    \  \"sourceUrl\": \"https://www.twitch.tv/videos/2721979417\",\r
-
-    \  \"eventStartGGId\": \"1534674\",\r
-
-    \  \"streamName\": \"smashalezmtp\"\r
-
-    }"
+\n  \"sourceUrl\": \"https://www.twitch.tv/videos/2721979417\",\r
+\n  \"eventStartGGId\": \"1534674\",\r
+\n  \"streamName\": \"smashalezmtp\",\r
+\n  \"tournamentId\": \"\"\r
+\n}"
 order: 1000

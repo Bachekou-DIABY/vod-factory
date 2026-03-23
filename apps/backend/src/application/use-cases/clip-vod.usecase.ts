@@ -130,8 +130,22 @@ export class ClipVodUseCase {
       let endSeconds: number;
       let fallback = false;
       if (setGames.length >= gameCount) {
-        // OCR a trouvé tous les games : couper après le Nième (pas le dernier — les suivants sont post-game)
-        endSeconds = setGames[gameCount - 1].end + this.bufferSeconds;
+        // OCR a trouvé tous les games
+        if (setGames.length > gameCount && set.endTime) {
+          // Plus de games que prévu : ancrer sur completedAt pour trouver le bon Nième
+          // (évite de couper trop tôt quand des faux positifs précèdent les vrais games)
+          const tEnd = new Date(set.endTime!).getTime() / 1000;
+          const completedAtVod = v1 + (tEnd - t1);
+          const gamesBeforeEnd = setGames.filter((p) => p.end <= completedAtVod + 300);
+          if (gamesBeforeEnd.length >= gameCount) {
+            const selected = gamesBeforeEnd.slice(-gameCount);
+            endSeconds = selected[selected.length - 1].end + this.bufferSeconds;
+          } else {
+            endSeconds = setGames[gameCount - 1].end + this.bufferSeconds;
+          }
+        } else {
+          endSeconds = setGames[gameCount - 1].end + this.bufferSeconds;
+        }
       } else if (allSetGames.length > 0) {
         // OCR a trouvé des games mais pas tous : lastOcrEnd plus fiable que completedAt
         // (le TO peut enregistrer le score des minutes après la fin réelle)
@@ -316,8 +330,24 @@ export class ClipVodUseCase {
 
         let endSeconds: number;
         if (setGames.length >= gameCount) {
-          // OCR a détecté tous les games : couper après le Nième (les suivants sont post-game)
-          endSeconds = setGames[gameCount - 1].end + this.bufferSeconds;
+          // OCR a détecté tous les games
+          if (setGames.length > gameCount && set.endTime) {
+            // Plus de games que prévu : ancrer sur completedAt pour trouver le bon Nième
+            const tEnd = new Date(set.endTime!).getTime() / 1000;
+            const completedAtVod = v1 + (tEnd - t1);
+            const gamesBeforeEnd = setGames.filter((p) => p.end <= completedAtVod + 300);
+            if (gamesBeforeEnd.length >= gameCount) {
+              const selected = gamesBeforeEnd.slice(-gameCount);
+              endSeconds = selected[selected.length - 1].end + this.bufferSeconds;
+              this.logger.log(
+                `Set ${i + 1}: ${setGames.length} games > ${gameCount} attendus — ancré sur completedAt(${Math.round(completedAtVod)}s) → game ${selected[selected.length - 1].start}s→${selected[selected.length - 1].end}s`,
+              );
+            } else {
+              endSeconds = setGames[gameCount - 1].end + this.bufferSeconds;
+            }
+          } else {
+            endSeconds = setGames[gameCount - 1].end + this.bufferSeconds;
+          }
         } else if (allSetGames.length > 0) {
           // OCR a trouvé des games mais pas tous : lastOcrEnd plus fiable que completedAt
           // MAIS si lastOcrEnd dépasse completedAt de plus de 5 min → le dernier game OCR est hors-set
@@ -448,6 +478,7 @@ export class ClipVodUseCase {
       filePath: result.outputPath,
       startSeconds,
       endSeconds,
+      status: 'PENDING',
     });
 
     await this.vodRepository.update(vod.id, {
@@ -461,6 +492,9 @@ export class ClipVodUseCase {
     };
   }
 
+  // Durée minimum d'une game valide (filtre les faux positifs OCR < 90s)
+  private readonly minGamePairDuration = 90;
+
   private buildGamePairs(events: GameScreenEvent[]): { start: number; end: number }[] {
     const pairs: { start: number; end: number }[] = [];
     let currentStart: number | null = null;
@@ -469,7 +503,12 @@ export class ClipVodUseCase {
       if (event.type === 'START' && currentStart === null) {
         currentStart = event.timestamp;
       } else if (event.type === 'END' && currentStart !== null) {
-        pairs.push({ start: currentStart, end: event.timestamp });
+        const duration = event.timestamp - currentStart;
+        if (duration >= this.minGamePairDuration) {
+          pairs.push({ start: currentStart, end: event.timestamp });
+        } else {
+          this.logger.debug(`🗑️ Faux positif filtré: ${Math.round(currentStart)}s→${Math.round(event.timestamp)}s (${Math.round(duration)}s < ${this.minGamePairDuration}s)`);
+        }
         currentStart = null;
       }
     }

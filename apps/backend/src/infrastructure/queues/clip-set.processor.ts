@@ -53,6 +53,7 @@ export class ClipSetProcessor extends WorkerHost {
       filePath: result.outputPath,
       startSeconds,
       endSeconds,
+      status: 'PENDING',
     });
 
     this.logger.log(`✅ [Job ${job.id}] Set ${setOrder} clipé: ${result.outputPath}`);

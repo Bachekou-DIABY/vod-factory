@@ -32,6 +32,7 @@ import { VodController } from '../infrastructure/http/vod.controller';
 import { TournamentVodsController } from '../infrastructure/http/tournament-vods.controller';
 import { TournamentSetsController } from '../infrastructure/http/tournament-sets.controller';
 import { ListTournamentsController } from '../infrastructure/http/list-tournaments.controller';
+import { ClipController } from '../infrastructure/http/clip.controller';
 import { ClipSetProcessor } from '../infrastructure/queues/clip-set.processor';
 import { AnalyzeChunkProcessor } from '../infrastructure/queues/analyze-chunk.processor';
 import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE } from '../infrastructure/queues/queue.constants';
@@ -53,7 +54,7 @@ export { VOD_PROCESSING_QUEUE };
     BullModule.registerQueue({ name: VOD_PROCESSING_QUEUE }),
     BullModule.registerQueue({ name: CLIP_SET_QUEUE }),
   ],
-  controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController],
+  controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController, ClipController],
   providers: [
     AppService, 
     PrismaService,

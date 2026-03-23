@@ -54,3 +54,7 @@ storage/clips/
 storage/frames/
 .tesseract-cache/
 context.md
+
+.angular
+
+__screenshots__/
