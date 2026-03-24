@@ -1,189 +1,115 @@
-# 🚀 VOD-Factory - Plan de Développement
+# VOD-Factory — Plan de Développement
 
-## 📋 Contexte Projet
+## Contexte Projet
 
-**VOD-Factory** est une plateforme SaaS d'indexation et de découpage automatisé de VODs e-sport avec focus sur Super Smash Bros. Ultimate.
+**VOD-Factory** est une plateforme d'indexation et de découpage automatisé de VODs e-sport, avec focus sur Super Smash Bros. Ultimate.
 
-- **Stack Technique** : Monorepo Nx, NestJS (Back), Angular (Front), Prisma (PostgreSQL), BullMQ (Redis), FFmpeg + Tesseract.js (Processing)
-- **Architecture** : Clean Architecture / Architecture Hexagonale
-- **Profil** : Développeur Fullstack Senior spécialisé Backend/Node.js
-
----
-
-## 🏗️ Phase 1 : Socle Technique & Data Persistence ✅
-
-### Objectif
-Établir les fondations techniques et permettre au backend de communiquer avec la base de données.
-
-### ✅ Actions Réalisées
-
-#### 1. Infrastructure & Qualité
-- [x] Initialisation Nx v22.5.4
-- [x] Structure `/apps` pour projets multiples
-- [x] CI/CD GitHub Actions (Lint/Test/Build)
-- [x] TDD sur les Use Cases
-
-#### 2. Cœur Backend & Architecture
-- [x] NestJS configuré avec Clean Architecture
-- [x] Séparation stricte : `domain/`, `application/`, `infrastructure/`
-- [x] Inversion de Dépendance (DIP) via tokens NestJS
-- [x] Mappers de données (isolation Prisma ↔ Domaine)
-
-#### 3. Base de Données Prisma
-- [x] PostgreSQL via Docker
-- [x] Schéma : `Tournament`, `Player`, `Set`, `Vod`
-- [x] Client Prisma configuré pour Nx monorepo
-
-### 📊 Progression Phase 1 : **100% ✅**
+- **Stack** : Monorepo Nx, NestJS (back), Angular 21 (front), Prisma (PostgreSQL), BullMQ (Redis), FFmpeg, yt-dlp
+- **Architecture** : Clean Architecture / Hexagonale
+- **Cible** : usage interne pour TOs (Tournois Operators)
 
 ---
 
-## 🎯 Phase 2 : Intégration Start.gg ✅
+## Phase 1 — Socle Technique ✅
 
-### Objectif
-Récupérer les données des tournois depuis l'API GraphQL de Start.gg.
+- [x] Nx 22.5.4, structure `/apps`, CI/CD GitHub Actions
+- [x] NestJS + Clean Architecture (`domain/`, `application/`, `infrastructure/`)
+- [x] DIP via tokens NestJS, Mappers Prisma ↔ Domaine
+- [x] PostgreSQL via Docker, schéma `Tournament`, `Player`, `Set`, `Vod`
 
-### ✅ Actions Réalisées
+---
+
+## Phase 2 — Intégration Start.gg ✅
+
 - [x] `IStartGGService` + `StartGGService` (GraphQL via Axios)
-- [x] Filtres par jeux (Ultimate, Melee, etc.)
 - [x] `ImportTournamentUseCase` + `ImportSetsUseCase`
-- [x] Tests unitaires TDD
+- [x] Filtres par jeux, ordonnancement par `startedAt`
+- [x] `getStreamSetsByEventId` : pagination complète + filtre par `streamName`
 
-### ⚠️ Limitation connue
-- `getSetsByEventId` paginé à 50/page sans boucle → sets tronqués si > 50 par event (à corriger en Phase 5)
-
-### 📊 Progression Phase 2 : **100% ✅** (fonctionnel, limitation pagination connue)
+⚠️ **Limitation connue** : `getSetsByEventId` paginé à 50 sets sans boucle (à corriger si event > 50 sets)
 
 ---
 
-## 🔄 Phase 3 : Video Management & VODs ✅
+## Phase 3 — Video Management ✅
 
-### Objectif
-Lier des sources vidéo aux tournois et télécharger les VODs.
+- [x] `YtDlpDownloadService` : téléchargement yt-dlp 1080p + merge AAC 192k
+- [x] `AddVodToTournamentUseCase`, `GetTournamentVodsUseCase`
+- [x] `VodController` : `POST /api/vods`, `GET /api/vods/:id`, streaming HTTP Range
+- [x] Fix Windows : spawn direct ffmpeg pour extraction frames (`%05d` incompatible fluent-ffmpeg)
 
-### ✅ Actions Réalisées
-- [x] `Vod` entity dans le domaine (`filePath`, `status`, métadonnées Twitch/YouTube)
-- [x] `VodRepository` avec Prisma
-- [x] `YtDlpDownloadService` : téléchargement réel via `yt-dlp`
-- [x] `AddVodToTournamentUseCase` + `GetTournamentVodsUseCase`
-- [x] `VodController` : `POST /api/vods`, `GET /api/vods/:id`
-- [x] Templates croppés générés dans `storage/templates/cropped/`
-
-### ⚠️ Limitation connue
-- `duration: 0` hardcodé dans `YtDlpDownloadService` (ffprobe à intégrer en Phase 5)
-
-### 📊 Progression Phase 3 : **100% ✅**
+⚠️ **Limitation connue** : durée/résolution hardcodées (ffprobe non intégré)
 
 ---
 
-## 🏗️ Phase 4 : Video Processing & OCR Detection 🚧
+## Phase 4 — Détection & Clipping Automatique ✅
 
-### Objectif
-Le "cœur nucléaire" : découpage automatique via OCR (pas de Template Matching).
-
-### Stratégie : OCR + Zone Centrale
-1. **Croper la zone centrale** (30%) où apparaissent "GO", "PARTEZ", "GAME", "FINI"
-2. **OCR avec Tesseract.js** : lire le texte, pas comparer les pixels
-3. **Mots-clés multilingues** : go/partez/start/begin + game/fini/end/finish/set
-
-### ✅ Actions Réalisées
-- [x] `IGameScreenDetector` interface propre
-- [x] `OcrGameScreenDetector` : pipeline complet FFmpeg → OCR → events
-- [x] `AnalyzeVodUseCase` : logique de comptage des games (`countGames`)
-- [x] `POST /api/vods/:id/analyze` endpoint dans `VodController`
-- [x] `tesseract.js` + `fluent-ffmpeg` installés
-- [x] Extraction frames 1fps avec crop zone centrale 30%
-- [x] Déduplication événements (fenêtre 5 secondes)
-- [x] Cleanup automatique des frames temporaires
-
-### ✅ Réalisé (20/03/2026) — réécriture complète stratégie détection
-- [x] Abandon Tesseract/OCR → détection par présence HUD timer (% pixels blancs zone top-right)
-- [x] State machine robuste : cooldown 25s post-END, 3 frames consécutives absentes, durée min 90s
+### Détection HUD timer (remplacement OCR Tesseract)
+- [x] Détection par % pixels blancs zone top-right (HUD timer SSBU)
+- [x] State machine : `timerVisibleThreshold=3%`, `minGameDuration=90s`, `cooldown=25s`, `consecutiveAbsent≥3`
 - [x] Validé sur 2 VODs : 9/9 games (2 BO5) + 3/3 games (3-0)
-- [x] `IVodClipper` + `FfmpegVodClipper` : clipping `-c copy` sans ré-encodage
-- [x] `ClipVodUseCase` : 1 clip par VOD (firstSTART-15s → lastEND+15s)
-- [x] `POST /api/vods/:id/clip` endpoint
-- [x] `AnalyzeVodUseCase` persiste `startTime`/`endTime` en base
-- [x] `YtDlpDownloadService` : 1080p + merge manuel video+audio (AAC 192k) si yt-dlp ne merge pas
-- [x] Fix Windows : spawn direct ffmpeg (pas fluent-ffmpeg) pour extraction frames
 
-### ✅ Réalisé (20/03/2026) — multi-set clipping + workers parallèles
-- [x] Multi-set clipping : 1 clip par set (groupé via `totalGames` Start.gg)
-- [x] Sets ordonnés automatiquement par `startedAt` depuis Start.gg API (aucune saisie manuelle)
+### Multi-set clipping + workers parallèles
 - [x] `Clip` model Prisma + `ClipRepository` + `GET /api/vods/:id/clips`
-- [x] `ClipSetProcessor` : `WorkerHost` BullMQ, concurrency 4, 1 job par set
-- [x] `ClipVodUseCase` : publie N jobs BullMQ en parallèle (1 par set)
-- [x] Events JSON persistés sur `Vod` (évite re-analyse au moment du clipping)
-- [x] `getStreamSetsByEventId` paginé complet + filtre par streamName
-- [x] Nettoyage historique git : 6.7 GB de vidéos purgées, repo = 28 MB
-
-### 📊 Progression Phase 4 : **100% ✅**
+- [x] `ClipSetProcessor` : WorkerHost BullMQ, concurrency 4, 1 job par set
+- [x] `GenerateClipsFromTimestampsUseCase` : timestamps Start.gg → clips directs (sans détection)
+- [x] Events JSON persistés sur `Vod` (évite re-analyse au clipping)
+- [x] `-movflags +faststart` sur tous les clips générés (streaming navigateur immédiat)
 
 ---
 
-## 🎯 Phase 5 : Test Longue VOD + Upload YouTube 🚧
+## Phase 5 — Frontend Angular + Upload YouTube ✅
 
-### Prochaine étape immédiate
-- [ ] **Test pipeline complet sur VOD 10h (Le Parthénon VI)** — besoin de l'event ID Start.gg
-  - `POST /api/vods` avec `eventStartGGId` + `streamName`
-  - Analyze → valider groupage 102 games détectées en sets
-  - Clip → valider N clips parallèles générés correctement
+### Interface Angular 21
+- [x] Page tournois : liste, import Start.gg, ajout VOD
+- [x] Page VOD : lecteur vidéo, gestion téléchargement/analyse/clipping, nommage inline, remux faststart
+- [x] Page clip-review : lecteur clip, recut dual-handle, approbation, édition titre/round/players/score
+- [x] Thumbnail custom uploadable par clip
+- [x] Page "Clips approuvés" par tournoi : liste avec statut upload YouTube
+- [x] Navigation cohérente : retour tournoi depuis vod-detail, retour vod (section clips) depuis clip-review
 
-### Suite
-- [ ] Upload YouTube automatique (OAuth2 Google, YouTube Data API v3)
-- [ ] Workers BullMQ : étendre pipeline (jobs download / analyze en queue, pas seulement clip)
-- [ ] Corriger pagination Start.gg (> 50 sets/event — limitation connue)
-- [ ] `ffprobe` pour durée/résolution réelles (actuellement hardcodé)
-- [ ] Supprimer le fichier VOD source après génération des clips (option configurable)
+### Upload YouTube
+- [x] OAuth2 Google (flux installed app, redirect `localhost:3000/api/youtube/callback`)
+- [x] `YouTubeService` : `getAuthUrl()`, `handleCallback()`, `uploadVideo()` + thumbnail auto
+- [x] Upload en arrière-plan avec statut `UPLOADING → UPLOADED / FAILED` en base
+- [x] `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` dans `.env`
+- [x] Tokens OAuth sauvegardés localement (`storage/youtube-tokens.json`, ignoré git)
+
+### Qualité / UX
+- [x] Suppression fiable ancien clip + thumbnail après recut (`path.resolve()` sur Windows)
+- [x] Suppression spam "Request aborted" dans les logs
+- [x] Boutons "📍 → Début" / "📍 → Fin" dans vod-detail et clip-review
+- [x] Prisma : `recordedAt`, `thumbnailPath`, `VOD.name` (migrations appliquées)
 
 ---
 
-## 🔒 Sécurité
+## Reste à faire (backlog)
 
-- [x] `.env` retiré du tracking git + `.gitignore` mis à jour
-- [x] Token Start.gg révoqué et remplacé
+- [ ] Pagination Start.gg > 50 sets par event
+- [ ] `ffprobe` pour durée/résolution réelles (actuellement 0/hardcodé)
+- [ ] Option suppression VOD source après génération clips
+- [ ] BullMQ : étendre pipeline (download + analyze en queue, pas seulement clip)
+- [ ] Support VODs locales : import fichier depuis interface (copie vers `storage/vods/`)
 
 ---
 
-## 🛠️ Stack Technique
+## Stack Technique
 
 | Couche | Technologie |
 |--------|-------------|
 | Monorepo | Nx 22.5.4 |
 | Backend | NestJS 11, TypeScript 5.9 |
+| Frontend | Angular 21, Tailwind CSS |
 | Base de données | PostgreSQL 15, Prisma 5.22 |
-| Cache/Jobs | Redis (Docker) + BullMQ (workers concurrency 4) |
-| OCR | Tesseract.js 5.x |
-| Video | fluent-ffmpeg 2.x |
-| Download | yt-dlp (CLI externe) |
+| Queue / Jobs | Redis + BullMQ (concurrency 4) |
+| Vidéo | FFmpeg, fluent-ffmpeg 2.x, yt-dlp |
+| YouTube | googleapis (OAuth2 + YouTube Data API v3) |
 
 ---
 
-## 📝 Historique
+## Historique
 
-**18/03/2026** :
-- Rollback Template Matching → OCR pure avec Tesseract.js
-- Fix Prisma Client output pour Nx monorepo
-- Templates de référence générés (usage : calibration OCR, pas template matching)
+**18-19/03/2026** : Socle Nx/NestJS, Prisma, Start.gg GraphQL, pipeline OCR (puis abandon Tesseract → HUD timer)
 
-**19/03/2026** :
-- Audit complet du codebase, réalignement du plan sur l'état réel
-- Fix `filePath` : migration Prisma + mapper + interface `download()` optional
-- Fix route collision `/:id/vods` dans `TournamentVodsController`
-- Implémentation pipeline OCR complet : FFmpeg frames → Tesseract → déduplication
-- Suppression code mort `calibrateWithTemplates()` (vestige Template Matching)
-- Sécurité : `.env` retiré du git, token révoqué
+**20/03/2026** : Multi-set clipping, BullMQ workers parallèles, Clip model, nettoyage git (6.7 GB purgés)
 
-**20/03/2026 (session 2)** :
-- Multi-set clipping : 1 clip par set via `totalGames` Start.gg + `startedAt` ordering
-- BullMQ workers : `ClipSetProcessor` concurrency 4, N jobs parallèles par `ClipVodUseCase`
-- `Clip` model + repository + endpoint `GET /api/vods/:id/clips`
-- Events JSON persistés sur `Vod` pour éviter re-analyse au clipping
-- Nettoyage git : 6.7 GB de vidéos purgées de l'historique (git filter-branch + gc)
-
-**20/03/2026** :
-- Réécriture détection : abandon Tesseract → HUD timer white pixel % (plus fiable, pas de dépendance OCR)
-- Implémentation clipping FFmpeg `-c copy` : 1 clip par VOD avec buffer 15s
-- Fix download 1080p : merge manuel video+audio avec transcodage AAC
-- Fix Windows : spawn direct pour extraction frames (fluent-ffmpeg incompatible `%05d` sur Windows)
-- Pipeline complet validé end-to-end sur 2 VODs SSBU
+**23-24/03/2026** : Angular frontend complet, clip-review UI, streaming vidéo, YouTube OAuth upload, remux faststart, thumbnail custom, fix recut Windows
