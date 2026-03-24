@@ -107,17 +107,11 @@ Pour uploader les clips sur YouTube :
 ## Pipeline
 
 ```
-POST /api/vods              → Enregistrer une VOD (URL Twitch/YouTube ou chemin local)
-POST /api/vods/:id/analyze  → Détecter les games via HUD timer (1fps, zone top-right)
-POST /api/vods/:id/clip     → Générer les clips (1 par set, FFmpeg -c copy)
-POST /api/clips/:id/upload-youtube → Uploader sur YouTube
+POST /api/vods              → Enregistrer une VOD (URL Twitch/YouTube)
+POST /api/vods/upload       → Uploader un fichier vidéo local (multipart)
+POST /api/vods/:id/clip     → Générer les clips (1 par set, FFmpeg -c copy, timestamps Start.gg)
+POST /api/clips/:id/upload-youtube → Uploader un clip sur YouTube
 ```
-
-**Détection SSBU** — state machine sur le % pixels blancs zone timer :
-- `timerVisibleThreshold = 3%` — HUD présent = game en cours
-- `minGameDurationSeconds = 90` — filtre les faux positifs courts
-- `cooldownAfterEndSeconds = 25` — évite les faux STARTs post-résultats
-- `consecutiveTimerAbsent ≥ 3` — ignore les kill screens (~1-2s)
 
 ---
 

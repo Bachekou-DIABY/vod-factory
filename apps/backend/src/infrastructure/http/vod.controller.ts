@@ -1,4 +1,6 @@
-import { Controller, Post, Patch, Body, Get, Param, Inject, Logger, Res, NotFoundException, Delete, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Get, Param, Inject, Logger, Res, NotFoundException, Delete, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Response } from 'express';
@@ -40,6 +42,45 @@ export class VodController {
     @InjectQueue(CLIP_SET_QUEUE)
     private readonly clipQueue: Queue,
   ) {}
+
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (_req, _file, cb) => {
+        const dir = path.join(process.cwd(), 'storage', 'vods');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+      },
+      filename: (_req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+        cb(null, `${base}_${Date.now()}${ext}`);
+      },
+    }),
+    fileFilter: (_req, file, cb) => {
+      cb(null, file.mimetype.startsWith('video/'));
+    },
+    limits: { fileSize: 50 * 1024 * 1024 * 1024 }, // 50 GB max
+  }))
+  async uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { tournamentId?: string; eventStartGGId?: string; streamName?: string; name?: string },
+  ) {
+    if (!file) throw new BadRequestException('Aucun fichier vidéo fourni');
+    this.logger.log(`📁 VOD uploadée: ${file.filename} (${(file.size / 1024 / 1024).toFixed(0)} MB)`);
+
+    const name = body.name || path.basename(file.originalname, path.extname(file.originalname));
+    return this.vodRepository.create({
+      sourceUrl: `local:${file.originalname}`,
+      filePath: file.path,
+      tournamentId: body.tournamentId,
+      eventStartGGId: body.eventStartGGId,
+      streamName: body.streamName,
+      name,
+      status: 'DOWNLOADED',
+      fileSize: file.size,
+    } as any);
+  }
 
   @Post()
   async create(@Body() dto: CreateVodDto) {

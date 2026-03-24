@@ -33,19 +33,57 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
         @if (showAddForm()) {
           <div class="mb-8 bg-gray-900 border border-gray-700 rounded-xl p-5">
             <h2 class="text-sm font-semibold text-gray-300 mb-4">Importer une VOD</h2>
+
+            <!-- Mode toggle -->
+            <div class="flex gap-1 mb-4 bg-gray-800 rounded-lg p-1 w-fit">
+              <button (click)="importMode.set('url')"
+                [class]="importMode() === 'url' ? 'px-3 py-1.5 bg-gray-700 rounded text-sm font-medium text-white' : 'px-3 py-1.5 text-sm text-gray-400 hover:text-gray-300'">
+                URL
+              </button>
+              <button (click)="importMode.set('file')"
+                [class]="importMode() === 'file' ? 'px-3 py-1.5 bg-gray-700 rounded text-sm font-medium text-white' : 'px-3 py-1.5 text-sm text-gray-400 hover:text-gray-300'">
+                Fichier local
+              </button>
+            </div>
+
             <div class="grid grid-cols-1 gap-3 mb-3">
-              <div>
-                <label class="block text-xs text-gray-500 mb-1">URL Twitch / YouTube — ou chemin local</label>
-                <input
-                  [(ngModel)]="newVodUrl"
-                  placeholder="https://www.twitch.tv/videos/... ou C:\vods\ma-vod.mp4"
-                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                />
-                <p class="text-xs text-gray-600 mt-1">
-                  Tu peux coller directement le chemin d'un fichier déjà téléchargé (ex: <code class="bg-gray-700 px-1 rounded text-gray-500">C:\vods\ma-vod.mp4</code> ou <code class="bg-gray-700 px-1 rounded text-gray-500">/home/user/vods/ma-vod.mp4</code>).
-                  Le fichier sera utilisé tel quel — pense à cliquer sur <strong class="text-gray-400">🔧 Corriger le format</strong> depuis la page VOD si la vidéo ne se charge pas dans le navigateur.
-                </p>
-              </div>
+              <!-- URL mode -->
+              @if (importMode() === 'url') {
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">URL Twitch / YouTube</label>
+                  <input
+                    [(ngModel)]="newVodUrl"
+                    placeholder="https://www.twitch.tv/videos/..."
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              }
+
+              <!-- File mode -->
+              @if (importMode() === 'file') {
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Fichier vidéo</label>
+                  <div class="flex items-center gap-3">
+                    <label class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium cursor-pointer transition-colors">
+                      Choisir un fichier
+                      <input type="file" accept="video/*" class="hidden" (change)="onFileSelected($event)" />
+                    </label>
+                    @if (selectedFile()) {
+                      <span class="text-sm text-gray-300 truncate max-w-xs">{{ selectedFile()!.name }}</span>
+                      <span class="text-xs text-gray-500 shrink-0">{{ (selectedFile()!.size / 1024 / 1024 / 1024).toFixed(2) }} Go</span>
+                    } @else {
+                      <span class="text-sm text-gray-600">Aucun fichier sélectionné</span>
+                    }
+                  </div>
+                  @if (uploadProgress() > 0 && uploadProgress() < 100) {
+                    <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                      <div class="h-full bg-blue-500 transition-all" [style.width.%]="uploadProgress()"></div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Upload : {{ uploadProgress() }}%</p>
+                  }
+                </div>
+              }
+
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-xs text-gray-500 mb-1">Event Start.gg</label>
@@ -81,11 +119,11 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
             </div>
             <div class="flex gap-3 items-center">
               <button
-                (click)="addVod()"
-                [disabled]="!newVodUrl || addingVod()"
+                (click)="importMode() === 'file' ? addVodFile() : addVod()"
+                [disabled]="(importMode() === 'url' ? !newVodUrl : !selectedFile()) || addingVod()"
                 class="px-4 py-2 bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
               >
-                {{ addingVod() ? 'Ajout...' : 'Ajouter' }}
+                {{ addingVod() ? 'Import en cours...' : 'Ajouter' }}
               </button>
               @if (addError()) {
                 <p class="text-red-400 text-xs">{{ addError() }}</p>
@@ -153,11 +191,14 @@ export class TournamentDetailPage implements OnInit {
   slug = '';
 
   showAddForm = signal(false);
+  importMode = signal<'url' | 'file'>('url');
   newVodUrl = '';
   newVodEventId = '';
   newVodStreamName = '';
   addingVod = signal(false);
   addError = signal('');
+  selectedFile = signal<File | null>(null);
+  uploadProgress = signal(0);
 
   /** VODs regroupées par event puis par stream */
   vodsByEvent = computed(() => {
@@ -211,6 +252,11 @@ export class TournamentDetailPage implements OnInit {
     });
   }
 
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    this.selectedFile.set(input.files?.[0] ?? null);
+  }
+
   addVod() {
     const t = this.tournament();
     if (!t || !this.newVodUrl) return;
@@ -233,6 +279,35 @@ export class TournamentDetailPage implements OnInit {
       error: (err) => {
         this.addError.set(err?.error?.message ?? 'Erreur lors de l\'ajout');
         this.addingVod.set(false);
+      },
+    });
+  }
+
+  addVodFile() {
+    const t = this.tournament();
+    const file = this.selectedFile();
+    if (!t || !file) return;
+    this.addingVod.set(true);
+    this.addError.set('');
+    this.uploadProgress.set(0);
+    this.api.uploadVodFile(file, {
+      tournamentId: t.id,
+      eventStartGGId: this.newVodEventId || undefined,
+      streamName: this.newVodStreamName || undefined,
+    }, (pct) => this.uploadProgress.set(pct)).subscribe({
+      next: () => {
+        this.selectedFile.set(null);
+        this.newVodEventId = '';
+        this.newVodStreamName = '';
+        this.uploadProgress.set(0);
+        this.addingVod.set(false);
+        this.showAddForm.set(false);
+        this.loadVods(t.id);
+      },
+      error: (err) => {
+        this.addError.set(err?.error?.message ?? 'Erreur lors de l\'upload');
+        this.addingVod.set(false);
+        this.uploadProgress.set(0);
       },
     });
   }

@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpEventType } from '@angular/common/http';
+import { Observable, map, filter } from 'rxjs';
 
 export interface Tournament {
   id: string;
@@ -186,6 +186,32 @@ export class ApiService {
 
   createManualClip(vodId: string, data: { startSeconds: number; endSeconds: number; title?: string }): Observable<any> {
     return this.http.post(`${this.base}/vods/${vodId}/manual-clip`, data);
+  }
+
+  uploadVodFile(
+    file: File,
+    meta: { tournamentId?: string; eventStartGGId?: string; streamName?: string },
+    onProgress?: (pct: number) => void,
+  ): Observable<Vod> {
+    const form = new FormData();
+    form.append('file', file);
+    if (meta.tournamentId) form.append('tournamentId', meta.tournamentId);
+    if (meta.eventStartGGId) form.append('eventStartGGId', meta.eventStartGGId);
+    if (meta.streamName) form.append('streamName', meta.streamName);
+
+    return this.http.post<Vod>(`${this.base}/vods/upload`, form, {
+      reportProgress: true,
+      observe: 'events',
+    }).pipe(
+      map((event) => {
+        if (event.type === HttpEventType.UploadProgress && event.total) {
+          onProgress?.(Math.round(100 * event.loaded / event.total));
+        }
+        if (event.type === HttpEventType.Response) return event.body as Vod;
+        return null;
+      }),
+      filter((v): v is Vod => v !== null),
+    );
   }
 
   // YouTube
