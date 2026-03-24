@@ -36,7 +36,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
     return new Promise((resolve, reject) => {
       const args = [
         url,
-        '-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
+        '-f', 'bestvideo[height>=360][vcodec!=none]+bestaudio/best[height>=360][vcodec!=none]/best[vcodec!=none]',
         '-o', output,
         '--no-playlist',
         '--progress',
@@ -45,6 +45,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
         '--no-call-home',
         '--ffmpeg-location', 'ffmpeg',
         '--merge-output-format', 'mp4',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
       ];
 
       const ytDlp = spawn(process.env.YT_DLP_PATH || 'yt-dlp', args);
@@ -86,12 +87,25 @@ export class YtDlpDownloadService implements IVodDownloadService {
           const stats = fs.statSync(downloadedFile);
           this.logger.log(`✅ Téléchargé: ${path.basename(downloadedFile)} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`);
 
+          // Extract stream start timestamp from yt-dlp metadata
+          let recordedAt: Date | undefined;
+          try {
+            const info = await this.getVideoInfo(url);
+            if (info.timestamp) {
+              recordedAt = new Date(info.timestamp * 1000);
+              this.logger.log(`📅 recordedAt: ${recordedAt.toISOString()}`);
+            }
+          } catch {
+            this.logger.warn(`⚠️ Impossible d'extraire le timestamp pour ${url}`);
+          }
+
           resolve({
             filePath: downloadedFile,
             fileSize: stats.size,
             duration: 0,
             resolution: '1080p',
             fps: 30,
+            recordedAt,
           });
         } catch (err) {
           reject(err);
@@ -100,29 +114,32 @@ export class YtDlpDownloadService implements IVodDownloadService {
     });
   }
 
-  async getVideoInfo(url: string): Promise<{ title: string; duration: number; uploader: string }> {
+  async getVideoInfo(url: string): Promise<{ title: string; duration: number; uploader: string; timestamp?: number }> {
     return new Promise((resolve, reject) => {
       const ytDlp = spawn(process.env.YT_DLP_PATH || 'yt-dlp', [
         url,
         '--print', '%(title)s',
         '--print', '%(duration)s',
         '--print', '%(uploader)s',
+        '--print', '%(timestamp)s',
         '--no-warnings',
       ]);
 
       let output = '';
-      
+
       ytDlp.stdout.on('data', (data) => {
         output += data.toString();
       });
 
       ytDlp.on('close', (code) => {
         if (code === 0) {
-          const [title, duration, uploader] = output.trim().split('\n');
+          const [title, duration, uploader, timestamp] = output.trim().split('\n');
+          const ts = parseInt(timestamp);
           resolve({
             title: title || 'Unknown',
             duration: parseInt(duration) || 0,
             uploader: uploader || 'Unknown',
+            timestamp: !isNaN(ts) ? ts : undefined,
           });
         } else {
           reject(new Error('Failed to get video info'));
@@ -173,6 +190,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
         '-c:v', 'copy',
         '-c:a', 'aac',
         '-b:a', '192k',
+        '-movflags', '+faststart',
         '-y',
         outputPath,
       ]);

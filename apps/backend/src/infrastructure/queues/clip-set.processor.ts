@@ -16,6 +16,10 @@ export interface ClipSetJobData {
   startSeconds: number;
   endSeconds: number;
   totalSets: number;
+  title?: string;
+  roundName?: string;
+  players?: string;
+  score?: string;
 }
 
 @Processor(CLIP_SET_QUEUE, { concurrency: 4 })
@@ -40,7 +44,7 @@ export class ClipSetProcessor extends WorkerHost {
   }
 
   private async processClipSet(job: Job<ClipSetJobData>): Promise<void> {
-    const { vodId, setOrder, setStartGGId, inputPath, outputPath, startSeconds, endSeconds } = job.data;
+    const { vodId, setOrder, setStartGGId, inputPath, outputPath, startSeconds, endSeconds, title, roundName, players, score } = job.data;
 
     this.logger.log(`✂️ [Job ${job.id}] Set ${setOrder} de VOD ${vodId}: [${startSeconds}s → ${endSeconds}s]`);
 
@@ -53,6 +57,10 @@ export class ClipSetProcessor extends WorkerHost {
       filePath: result.outputPath,
       startSeconds,
       endSeconds,
+      title,
+      roundName,
+      players,
+      score,
       status: 'PENDING',
     });
 

@@ -37,6 +37,7 @@ export class FfmpegVodClipper implements IVodClipper {
           '-to', String(endSeconds - startSeconds), // durée relative après seek
           '-c', 'copy',                             // pas de re-encodage
           '-avoid_negative_ts', 'make_zero',        // corrige les timestamps négatifs post-seek
+          '-movflags', '+faststart',                // moov atom en tête pour streaming immédiat
         ])
         .output(outputPath)
         .on('end', () => resolve())

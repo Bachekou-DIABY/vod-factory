@@ -14,6 +14,7 @@ export interface DownloadResult {
   duration: number;
   resolution: string;
   fps: number;
+  recordedAt?: Date; // Stream start time (from yt-dlp metadata)
 }
 
 export interface IVodDownloadService {

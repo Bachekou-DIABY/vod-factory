@@ -24,6 +24,7 @@ import { StartGGService } from '../infrastructure/external-services/startgg.serv
 import { OcrGameScreenDetector } from '../infrastructure/external-services/ocr-game-screen-detector.service';
 import { FfmpegVodClipper } from '../infrastructure/external-services/ffmpeg-vod-clipper.service';
 import { ClipVodUseCase } from '../application/use-cases/clip-vod.usecase';
+import { GenerateClipsFromTimestampsUseCase } from '../application/use-cases/generate-clips-from-timestamps.usecase';
 import { VOD_CLIPPER_TOKEN } from '../domain/interfaces/vod-clipper.interface';
 import { ClipRepository } from '../infrastructure/persistence/clip.repository';
 import { CLIP_REPOSITORY_TOKEN } from '../domain/repositories/clip.repository.interface';
@@ -33,6 +34,9 @@ import { TournamentVodsController } from '../infrastructure/http/tournament-vods
 import { TournamentSetsController } from '../infrastructure/http/tournament-sets.controller';
 import { ListTournamentsController } from '../infrastructure/http/list-tournaments.controller';
 import { ClipController } from '../infrastructure/http/clip.controller';
+import { StartGGController } from '../infrastructure/http/startgg.controller';
+import { YouTubeController } from '../infrastructure/http/youtube.controller';
+import { YouTubeService } from '../infrastructure/external-services/youtube.service';
 import { ClipSetProcessor } from '../infrastructure/queues/clip-set.processor';
 import { AnalyzeChunkProcessor } from '../infrastructure/queues/analyze-chunk.processor';
 import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE } from '../infrastructure/queues/queue.constants';
@@ -54,7 +58,7 @@ export { VOD_PROCESSING_QUEUE };
     BullModule.registerQueue({ name: VOD_PROCESSING_QUEUE }),
     BullModule.registerQueue({ name: CLIP_SET_QUEUE }),
   ],
-  controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController, ClipController],
+  controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController, ClipController, StartGGController, YouTubeController],
   providers: [
     AppService, 
     PrismaService,
@@ -104,8 +108,10 @@ export { VOD_PROCESSING_QUEUE };
       useClass: ClipRepository,
     },
     ClipVodUseCase,
+    GenerateClipsFromTimestampsUseCase,
     ClipSetProcessor,
     AnalyzeChunkProcessor,
+    YouTubeService,
   ],
 })
 export class AppModule {}

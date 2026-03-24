@@ -1,0 +1,15 @@
+$kind: http-request
+name: Generate clips from timestamps
+method: POST
+url: "{{baseUrl}}/startgg/vods/cmn3a4ao4000f2729q8bu40pf/generate-clips"
+body:
+  type: json
+  content: |-
+    {
+      "eventStartGGId": "1548524",
+      "streamName": "cloud_army_",
+      "vodRecordedAtUnix":"1774200349",
+      "preBufferSeconds": 60,
+      "postBufferSeconds": 30
+    }
+order: 5000

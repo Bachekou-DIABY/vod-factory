@@ -75,6 +75,7 @@ model Vod {
   eventStartGGId String?   // Start.gg event ID (VOD multi-sets)
   streamName     String?   // Nom du channel Twitch (filtre sets)
   tournamentId   String?   // Tournoi pour filtrage
+  name           String?   // Display name (ex: "VOD Jour 1 - Stream A")
   sourceUrl      String    // Original VOD URL (Twitch, YouTube, etc.)
   filePath       String?   // Local path of the downloaded file
   processedUrl   String?   // Processed video URL
@@ -85,6 +86,7 @@ model Vod {
   fps            Int?      // Frames per second
   startTime      Int?      // Start time in seconds from original VOD
   endTime        Int?      // End time in seconds from original VOD
+  recordedAt     DateTime? // Stream start time (from yt-dlp metadata)
   events         Json?     // Array of GameScreenEvent détectés (final, après merge)
   totalChunks    Int?      // Nombre de chunks d'analyse
   completedChunks Int?     @default(0)
@@ -119,12 +121,14 @@ model Clip {
   filePath     String
   startSeconds Int
   endSeconds   Int
-  title        String?    // Titre éditable (ex: "Grand Final — Seidokan vs Ironsup")
-  roundName    String?    // Round (ex: "Winners Semi-Final")
-  players      String?    // "Player1 vs Player2"
-  score        String?    // "3 - 1"
-  status       ClipStatus @default(PENDING)
-  createdAt    DateTime   @default(now())
+  title          String?    // Titre éditable (ex: "Grand Final — Seidokan vs Ironsup")
+  roundName      String?    // Round (ex: "Winners Semi-Final")
+  players        String?    // "Player1 vs Player2"
+  score          String?    // "3 - 1"
+  thumbnailPath  String?    // Local path to thumbnail image
+  youtubeVideoId String?    // YouTube video ID after upload
+  status         ClipStatus @default(PENDING)
+  createdAt      DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
   vod          Vod        @relation(fields: [vodId], references: [id], onDelete: Cascade)

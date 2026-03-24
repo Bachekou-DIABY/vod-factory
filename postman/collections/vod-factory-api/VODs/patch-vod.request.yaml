@@ -6,7 +6,8 @@ pathVariables:
   id: ""
 body:
   type: json
-  content: "{\r
-\n  \"tournamentId\": \"\"\r
-\n}"
+  content: |-
+    {
+      "tournamentId": ""
+    }
 order: 1100

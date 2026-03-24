@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import * as fs from 'fs';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
 import { ISetRepository, SET_REPOSITORY_TOKEN } from '../../domain/repositories/set.repository.interface';
 import { IVodDownloadService, VOD_DOWNLOAD_SERVICE_TOKEN } from '../../domain/interfaces/vod-download-service.interface';
@@ -50,9 +51,35 @@ export class AddVodToTournamentUseCase {
       if (!set) throw new NotFoundException(`Set non trouvé: ${setId}`);
     }
 
-    // 2. Valider l'URL (YouTube ou Twitch)
+    // 2. Détecter si chemin local ou URL distante
+    if (this.isLocalPath(sourceUrl)) {
+      if (!fs.existsSync(sourceUrl)) {
+        throw new NotFoundException(`Fichier local non trouvé: ${sourceUrl}`);
+      }
+      const stats = fs.statSync(sourceUrl);
+      const vod = await this.vodRepository.create({
+        setId,
+        eventStartGGId,
+        streamName,
+        tournamentId,
+        sourceUrl,
+        status: VodStatus.DOWNLOADED,
+        filePath: sourceUrl,
+        fileSize: Number(stats.size),
+      } as any);
+      this.logger.log(`✅ VOD locale enregistrée: ${vod.id} → ${sourceUrl}`);
+      return {
+        id: vod.id,
+        setId: vod.setId,
+        eventStartGGId: vod.eventStartGGId,
+        sourceUrl: vod.sourceUrl,
+        status: VodStatus.DOWNLOADED,
+        message: 'VOD locale enregistrée avec succès.',
+      };
+    }
+
     if (!this.isValidUrl(sourceUrl)) {
-      throw new Error('URL invalide. Doit être YouTube ou Twitch.');
+      throw new Error('URL invalide. Doit être YouTube, Twitch, ou un chemin local absolu.');
     }
 
     // 3. Créer la VOD
@@ -85,6 +112,10 @@ export class AddVodToTournamentUseCase {
       status: VodStatus.DOWNLOADING,
       message: 'VOD créée. Téléchargement en cours...',
     };
+  }
+
+  private isLocalPath(p: string): boolean {
+    return p.startsWith('/') || /^[a-zA-Z]:[\\\/]/.test(p);
   }
 
   private isValidUrl(url: string): boolean {
@@ -123,6 +154,7 @@ export class AddVodToTournamentUseCase {
       fileSize: result.fileSize,
       duration: result.duration,
       resolution: result.resolution,
+      recordedAt: result.recordedAt,
     });
 
     this.logger.log(`✅ VOD ${vodId} téléchargée: ${result.filePath}`);

@@ -52,6 +52,8 @@ Thumbs.db
 storage/vods/
 storage/clips/
 storage/frames/
+storage/thumbnails/
+storage/youtube-tokens.json
 .tesseract-cache/
 context.md
 

@@ -14,6 +14,7 @@ export interface Vod {
   eventStartGGId?: string;
   streamName?: string;
   tournamentId?: string;
+  name?: string;
   sourceUrl: string;
   filePath?: string;
   processedUrl?: string;
@@ -24,6 +25,7 @@ export interface Vod {
   fps?: number;
   startTime?: number;
   endTime?: number;
+  recordedAt?: Date;
   events?: Record<string, any>[];
   metadata?: Record<string, any>;
   createdAt: Date;

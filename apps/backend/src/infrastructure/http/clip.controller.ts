@@ -3,6 +3,7 @@ import {
   Get,
   Patch,
   Post,
+  Delete,
   Body,
   Param,
   Inject,
@@ -10,7 +11,11 @@ import {
   NotFoundException,
   BadRequestException,
   Res,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
 import { Response } from 'express';
 import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositories/clip.repository.interface';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
@@ -18,6 +23,7 @@ import { IVodClipper, VOD_CLIPPER_TOKEN } from '../../domain/interfaces/vod-clip
 import { ClipStatus } from '../../domain/entities/clip.entity';
 import * as path from 'path';
 import * as fs from 'fs';
+import ffmpeg from 'fluent-ffmpeg';
 
 class UpdateClipDto {
   title?: string;
@@ -63,6 +69,82 @@ export class ClipController {
     return this.clipRepository.update(id, dto);
   }
 
+  private generateThumbnail(clipPath: string, thumbPath: string, seekSeconds: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      ffmpeg(clipPath)
+        .seekInput(seekSeconds)
+        .outputOptions(['-vframes', '1', '-q:v', '5'])
+        .output(thumbPath)
+        .on('end', () => resolve())
+        .on('error', (err: Error) => reject(err))
+        .run();
+    });
+  }
+
+  @Post(':id/thumbnail')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (_req, _file, cb) => {
+        const dir = path.join(process.cwd(), 'storage', 'thumbnails');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+      },
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname) || '.jpg';
+        cb(null, `${(req as any).params['id']}_custom${ext}`);
+      },
+    }),
+    fileFilter: (_req, file, cb) => {
+      cb(null, file.mimetype.startsWith('image/'));
+    },
+  }))
+  async uploadThumbnail(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Aucun fichier image fourni');
+    const clip = await this.clipRepository.findById(id);
+    if (!clip) throw new NotFoundException(`Clip ${id} non trouvé`);
+
+    // Remove old auto-generated thumbnail if it exists and differs
+    if (clip.thumbnailPath && clip.thumbnailPath !== file.path && fs.existsSync(clip.thumbnailPath)) {
+      fs.unlinkSync(clip.thumbnailPath);
+    }
+
+    this.logger.log(`🖼️ Thumbnail custom uploadé pour clip ${id}: ${file.filename}`);
+    return this.clipRepository.update(id, { thumbnailPath: file.path } as any);
+  }
+
+  @Get(':id/thumbnail')
+  async thumbnail(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const clip = await this.clipRepository.findById(id);
+    if (!clip?.filePath || !fs.existsSync(clip.filePath)) {
+      res.status(404).json({ message: 'Clip non trouvé' });
+      return;
+    }
+
+    const thumbPath = clip.filePath.replace(/\.[^.]+$/, '_thumb.jpg');
+
+    if (!fs.existsSync(thumbPath)) {
+      const duration = clip.endSeconds - clip.startSeconds;
+      const seekAt = Math.max(1, duration * 0.1);
+      try {
+        await this.generateThumbnail(clip.filePath, thumbPath, seekAt);
+        this.clipRepository.update(id, { thumbnailPath: thumbPath } as any).catch(() => {});
+      } catch (err) {
+        this.logger.warn(`Thumbnail generation failed for clip ${id}: ${(err as Error).message}`);
+        res.status(404).json({ message: 'Thumbnail non disponible' });
+        return;
+      }
+    }
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.sendFile(path.resolve(thumbPath));
+  }
+
   @Get(':id/stream')
   async stream(
     @Param('id') id: string,
@@ -76,10 +158,18 @@ export class ClipController {
 
     const filePath = path.resolve(clip.filePath);
     res.sendFile(filePath, (err) => {
-      if (err) {
+      if (err && err.message !== 'Request aborted') {
         this.logger.error(`Erreur streaming clip ${id}: ${err.message}`);
       }
     });
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string) {
+    const clip = await this.clipRepository.findById(id);
+    if (!clip) throw new NotFoundException(`Clip ${id} non trouvé`);
+    await this.clipRepository.delete(id);
+    return { message: 'Clip supprimé' };
   }
 
   @Post(':id/recut')
@@ -113,10 +203,11 @@ export class ClipController {
       endSeconds,
     });
 
-    // Remove old file if it exists and is different
-    if (clip.filePath !== newFilePath && fs.existsSync(clip.filePath)) {
-      fs.unlinkSync(clip.filePath);
-    }
+    // Remove old clip file + thumbnail
+    const oldPath = path.resolve(clip.filePath);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    const oldThumb = oldPath.replace(/\.[^.]+$/, '_thumb.jpg');
+    if (fs.existsSync(oldThumb)) fs.unlinkSync(oldThumb);
 
     return this.clipRepository.update(id, {
       startSeconds,

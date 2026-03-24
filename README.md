@@ -71,7 +71,7 @@ apps/
 - ✅ **Phase 2** — Intégration Start.gg (GraphQL)
 - ✅ **Phase 3** — Pipeline vidéo : download (yt-dlp), détection games (HUD timer OCR), clipping (FFmpeg)
 - 🔄 **Phase 4** — Robustesse & scale : tests VODs longues (10h+), workers BullMQ parallèles, upload YouTube
-- ⏳ **Phase 5** — Dashboard frontend Angular
+- ⏳ **Phase 5** — Dashboard it Angular
 
 ## 🎬 Pipeline VOD (Phase 3)
 
@@ -91,7 +91,8 @@ POST /api/vods/:id/clip     → Génère le clip (firstSTART-15s → lastEND+15s
 
 | Commande | Description |
 |---|---|
-| `npm run dev` | Lance l'API en dev |
+| `npm run dev` | Lance le backend (API sur port 3000) |
+| `npx nx serve frontend` | Lance le frontend (UI sur port 4200) |
 | `npm run docker:up` | Démarre Postgres + Redis |
 | `npm run prisma:studio` | Interface visuelle BDD |
 | `npm run test` | Lance les tests |

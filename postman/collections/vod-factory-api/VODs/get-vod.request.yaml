@@ -3,5 +3,5 @@ name: Get VOD
 method: GET
 url: "{{baseUrl}}/vods/:id"
 pathVariables:
-  id: cmmy20d1x0001na88cq4ryewd
+  id: cmn38ar5f0000h0upz3ypsvwc
 order: 2000

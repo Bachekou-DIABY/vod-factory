@@ -1,0 +1,31 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/vods"
+  method: POST
+  body:
+    type: json
+    content: |-
+      {
+        "sourceUrl": "https://www.twitch.tv/videos/2729130147",
+        "eventStartGGId": "1548524",
+        "streamName": "cloud_army_",
+        "tournamentId": "cmn38ar5f0000h0upz3ypsvwc"
+      }
+response:
+  statusCode: 201
+  statusText: Created
+  headers:
+    x-powered-by: Express
+    access-control-allow-origin: http://localhost:4200
+    vary: Origin
+    content-type: application/json; charset=utf-8
+    content-length: "192"
+    etag: W/"c0-UTYlnvTqTj9cIFZj9LpXfLJz9JU"
+    date: Mon, 23 Mar 2026 13:46:00 GMT
+    connection: keep-alive
+    keep-alive: timeout=5
+  body:
+    type: json
+    content: '{"id":"cmn38o14g0004h0uppmwcnua9","eventStartGGId":"1548524","sourceUrl":"https://www.twitch.tv/videos/2729130147","status":"DOWNLOADING","message":"VOD
+      créée. Téléchargement en cours..."}'
+order: 1774273945429

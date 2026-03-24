@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { gql } from 'graphql-tag';
 import { print } from 'graphql';
-import { IStartGGService, StartGGEventResponse, StartGGSetResponse } from '../../domain/services/startgg.service.interface';
+import { IStartGGService, StartGGEventResponse, StartGGSetResponse, StartGGTournamentSearchResult } from '../../domain/services/startgg.service.interface';
 import { Tournament } from '../../domain/entities/tournament.entity';
 
 interface StartGGEvent {
@@ -82,6 +82,37 @@ export class StartGGService implements IStartGGService {
     } catch (error) {
       this.logger.error(`Error fetching tournament: ${error.message}`);
       throw new Error('Failed to fetch data from Start.gg');
+    }
+  }
+
+  async searchTournaments(query: string): Promise<StartGGTournamentSearchResult[]> {
+    const gqlQuery = gql`
+      query SearchTournaments($query: String!) {
+        tournaments(query: { perPage: 15, filter: { name: $query } }) {
+          nodes {
+            id
+            name
+            slug
+            startAt
+          }
+        }
+      }
+    `;
+    try {
+      const response = await axios.post(
+        this.apiUrl,
+        { query: print(gqlQuery), variables: { query } },
+        { headers: { Authorization: `Bearer ${this.apiToken}` } },
+      );
+      return (response.data?.data?.tournaments?.nodes || []).map((t: any) => ({
+        id: t.id.toString(),
+        name: t.name,
+        slug: (t.slug as string).replace(/^tournament\//, ''),
+        startAt: t.startAt,
+      }));
+    } catch (error) {
+      this.logger.error(`Error searching tournaments: ${error.message}`);
+      return [];
     }
   }
 
@@ -202,6 +233,54 @@ export class StartGGService implements IStartGGService {
       this.logger.error(`Error fetching stream sets for event ${eventStartGGId}: ${error.message}`);
       return [];
     }
+  }
+
+  async getAllSetsByEventId(eventStartGGId: string, streamName?: string): Promise<StartGGSetResponse[]> {
+    const allSets: StartGGSetNode[] = [];
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      const query = `query { event(id: ${eventStartGGId}) { sets(page: ${page}, perPage: 50) { pageInfo { totalPages } nodes { id fullRoundText winnerId displayScore totalGames startedAt completedAt stream { streamName streamId } slots { entrant { id name } } } } } }`;
+      try {
+        const response = await axios.post(
+          this.apiUrl,
+          { query },
+          { headers: { Authorization: `Bearer ${this.apiToken}` } },
+        );
+        if (response.data?.errors) {
+          this.logger.error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
+          break;
+        }
+        const data = response.data?.data?.event?.sets;
+        if (!data) break;
+        totalPages = data.pageInfo?.totalPages ?? 1;
+        allSets.push(...(data.nodes as StartGGSetNode[]));
+        page++;
+      } catch (error) {
+        this.logger.error(`Error fetching sets page ${page} for event ${eventStartGGId}: ${error.message}`);
+        break;
+      }
+    } while (page <= totalPages);
+
+    const valid = allSets.filter(
+      (s) => s.slots?.length === 2 && s.slots[0].entrant && s.slots[1].entrant &&
+        (!streamName || s.stream?.streamName?.toLowerCase() === streamName.toLowerCase()),
+    );
+    valid.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+    return valid.map((s) => ({
+      id: s.id.toString(),
+      roundName: s.fullRoundText,
+      totalGames: s.totalGames,
+      streamName: s.stream?.streamName,
+      winnerId: s.winnerId?.toString() ?? '',
+      score: s.displayScore,
+      startTime: s.startedAt ? new Date(s.startedAt * 1000).toISOString() : undefined,
+      endTime: s.completedAt ? new Date(s.completedAt * 1000).toISOString() : undefined,
+      stream: s.stream ? { streamName: s.stream.streamName, streamId: s.stream.streamId } : undefined,
+      player1: { id: s.slots[0].entrant!.id.toString(), name: s.slots[0].entrant!.name },
+      player2: { id: s.slots[1].entrant!.id.toString(), name: s.slots[1].entrant!.name },
+    }));
   }
 
   private async getSetsByEventId(eventId: string): Promise<StartGGSetResponse[]> {

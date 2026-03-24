@@ -1,0 +1,15 @@
+$kind: http-request
+name: Generate clips (calage manuel)
+method: POST
+url: "{{baseUrl}}/startgg/vods/VOD_ID_ICI/generate-clips"
+body:
+  type: json
+  content: |-
+    {
+      "eventStartGGId": "1534674",
+      "streamName": "smashalezmtp",
+      "vodRecordedAtUnix": 1700000000,
+      "preBufferSeconds": 60,
+      "postBufferSeconds": 30
+    }
+order: 6000

@@ -4,10 +4,13 @@ method: POST
 url: "{{baseUrl}}/vods"
 body:
   type: json
-  content: "{\r
-\n  \"sourceUrl\": \"https://www.twitch.tv/videos/2721979417\",\r
-\n  \"eventStartGGId\": \"1534674\",\r
-\n  \"streamName\": \"smashalezmtp\",\r
-\n  \"tournamentId\": \"\"\r
-\n}"
+  content: |-
+    
+    {
+      "sourceUrl": "https://www.twitch.tv/videos/2729078712",
+      "eventStartGGId": "1548524",
+      "streamName": "cloud_army_",
+      "tournamentId": "cmn38ar5f0000h0upz3ypsvwc"
+    }
+examples: .resources/add-vod.resources/examples
 order: 1000

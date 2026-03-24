@@ -12,6 +12,8 @@ export interface Clip {
   roundName?: string;
   players?: string;
   score?: string;
+  thumbnailPath?: string;
+  youtubeVideoId?: string;
   status: ClipStatus;
   createdAt: Date;
   updatedAt: Date;

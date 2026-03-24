@@ -29,7 +29,7 @@ export class ClipRepository implements IClipRepository {
 
   async update(
     id: string,
-    data: Partial<Pick<Clip, 'startSeconds' | 'endSeconds' | 'title' | 'roundName' | 'players' | 'score' | 'status' | 'filePath'>>,
+    data: Partial<Pick<Clip, 'startSeconds' | 'endSeconds' | 'title' | 'roundName' | 'players' | 'score' | 'status' | 'filePath' | 'thumbnailPath' | 'youtubeVideoId' >>,
   ): Promise<Clip> {
     const updated = await this.db.clip.update({ where: { id }, data });
     return this.toDomain(updated);
@@ -52,6 +52,8 @@ export class ClipRepository implements IClipRepository {
       roundName: prismaClip.roundName ?? undefined,
       players: prismaClip.players ?? undefined,
       score: prismaClip.score ?? undefined,
+      thumbnailPath: prismaClip.thumbnailPath ?? undefined,
+      youtubeVideoId: prismaClip.youtubeVideoId ?? undefined,
       status: prismaClip.status,
       createdAt: prismaClip.createdAt,
       updatedAt: prismaClip.updatedAt,
