@@ -37,18 +37,6 @@ export class VodRepository implements IVodRepository {
     return vods.map(VodMapper.toDomain);
   }
 
-  async findByTournamentId(tournamentId: string): Promise<Vod[]> {
-    const vods = await this.prisma.vod.findMany({
-      where: {
-        set: {
-          tournamentId: tournamentId,
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-    return vods.map(VodMapper.toDomain);
-  }
-
   async findByStatus(status: VodStatus): Promise<Vod[]> {
     const vods = await this.prisma.vod.findMany({
       where: { status: status as unknown as PrismaVodStatus },

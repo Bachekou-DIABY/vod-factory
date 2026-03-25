@@ -118,7 +118,7 @@ export class AddVodToTournamentUseCase {
   }
 
   private isLocalPath(p: string): boolean {
-    return p.startsWith('/') || /^[a-zA-Z]:[\\\/]/.test(p);
+    return p.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(p);
   }
 
   private isValidUrl(url: string): boolean {

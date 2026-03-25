@@ -83,7 +83,7 @@ export class YouTubeController {
     await this.clipRepository.update(id, { status: 'UPLOADING' });
 
     // Run upload in background
-    this.runUpload(id, clip).catch(() => {});
+    this.runUpload(id, clip).catch((err) => { this.logger.error(`Upload background error: ${err}`); });
 
     return { message: 'Upload en cours...' };
   }

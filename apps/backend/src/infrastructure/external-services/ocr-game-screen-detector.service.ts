@@ -61,7 +61,7 @@ export class OcrGameScreenDetector implements IGameScreenDetector {
 
     const worker = await createWorker('eng', 1, {
       cachePath: this.tesseractCachePath,
-      logger: () => {},
+      logger: () => { /* suppress tesseract logs */ },
     });
     await worker.setParameters({
       tessedit_char_whitelist: '0123456789:',

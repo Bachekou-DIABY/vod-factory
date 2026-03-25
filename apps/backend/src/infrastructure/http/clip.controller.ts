@@ -135,7 +135,7 @@ export class ClipController {
       const seekAt = Math.max(1, duration * 0.1);
       try {
         await this.generateThumbnail(clip.filePath, thumbPath, seekAt);
-        this.clipRepository.update(id, { thumbnailPath: thumbPath } as any).catch(() => {});
+        this.clipRepository.update(id, { thumbnailPath: thumbPath } as any).catch((e) => { this.logger.warn(`Thumb DB update failed: ${e}`); });
       } catch (err) {
         this.logger.warn(`Thumbnail generation failed for clip ${id}: ${(err as Error).message}`);
         res.status(404).json({ message: 'Thumbnail non disponible' });
