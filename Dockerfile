@@ -22,7 +22,9 @@ WORKDIR /app
 
 # Install ffmpeg + yt-dlp
 RUN apk add --no-cache ffmpeg python3 py3-pip curl && \
-    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then YT_DLP_BIN="yt-dlp_linux_aarch64"; else YT_DLP_BIN="yt-dlp"; fi && \
+    curl -L "https://github.com/yt-dlp/yt-dlp/releases/latest/download/${YT_DLP_BIN}" -o /usr/local/bin/yt-dlp && \
     chmod +x /usr/local/bin/yt-dlp
 
 COPY --from=builder /app/dist/apps/backend/main.js ./

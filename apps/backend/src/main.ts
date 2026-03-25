@@ -14,7 +14,9 @@ import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE, VOD_DOWNLOAD_QUEUE } from './infr
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: 'http://localhost:4200' });
+  const allowedOrigins = ['http://localhost:4200'];
+  if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
+  app.enableCors({ origin: allowedOrigins });
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
 

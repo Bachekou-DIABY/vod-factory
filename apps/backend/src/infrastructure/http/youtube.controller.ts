@@ -54,7 +54,8 @@ export class YouTubeController {
     try {
       await this.youtubeService.handleCallback(code);
       // Redirect to frontend approved page
-      res.redirect('http://localhost:4200/youtube-connected');
+      const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:4200';
+      res.redirect(`${frontendUrl}/youtube-connected`);
     } catch (err) {
       this.logger.error(`OAuth callback error: ${(err as Error).message}`);
       res.status(500).send(`Erreur OAuth: ${(err as Error).message}`);

@@ -5,7 +5,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const TOKENS_PATH = path.join(process.cwd(), 'storage', 'youtube-tokens.json');
-const REDIRECT_URI = 'http://localhost:3000/api/youtube/callback';
+const REDIRECT_URI = process.env.BACKEND_URL
+  ? `${process.env.BACKEND_URL}/api/youtube/callback`
+  : 'http://localhost:3000/api/youtube/callback';
 const SCOPES = [
   'https://www.googleapis.com/auth/youtube.upload',
   'https://www.googleapis.com/auth/youtube',

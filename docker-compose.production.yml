@@ -47,6 +47,8 @@ services:
       STARTGG_API_TOKEN: ${STARTGG_API_TOKEN}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4200}
       YT_DLP_PATH: /usr/local/bin/yt-dlp
       PORT: 3000
     volumes:
