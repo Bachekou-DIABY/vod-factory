@@ -10,7 +10,7 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { Queue } from 'bullmq';
-import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE } from './infrastructure/queues/queue.constants';
+import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE, VOD_DOWNLOAD_QUEUE } from './infrastructure/queues/queue.constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -29,6 +29,7 @@ async function bootstrap() {
     queues: [
       new BullMQAdapter(new Queue(VOD_PROCESSING_QUEUE, { connection: redisConnection })),
       new BullMQAdapter(new Queue(CLIP_SET_QUEUE, { connection: redisConnection })),
+      new BullMQAdapter(new Queue(VOD_DOWNLOAD_QUEUE, { connection: redisConnection })),
     ],
     serverAdapter,
   });

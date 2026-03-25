@@ -433,7 +433,7 @@ export class ClipVodUseCase {
 
     // Publier tous les jobs en parallèle
     await Promise.all(
-      jobs.map((data) => this.queue.add(CLIP_SET_JOB, data))
+      jobs.map((data) => this.queue.add(CLIP_SET_JOB, data, { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }))
     );
     this.logger.log(`🚀 ${jobs.length} jobs clip-set publiés pour VOD ${vod.id}`);
 

@@ -122,6 +122,7 @@ model Clip {
   startSeconds Int
   endSeconds   Int
   title          String?    // Titre éditable (ex: "Grand Final — Seidokan vs Ironsup")
+  description    String?    // Description YouTube (auto-générée ou custom)
   roundName      String?    // Round (ex: "Winners Semi-Final")
   players        String?    // "Player1 vs Player2"
   score          String?    // "3 - 1"

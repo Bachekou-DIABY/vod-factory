@@ -1,4 +1,4 @@
-import { Controller, Post, Patch, Body, Get, Param, Inject, Logger, Res, NotFoundException, Delete, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Get, Param, Inject, Logger, Res, NotFoundException, Delete, BadRequestException, UseInterceptors, UploadedFile, InternalServerErrorException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -8,12 +8,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { AddVodToTournamentUseCase, AddVodToTournamentInput } from '../../application/use-cases/add-vod-to-tournament.usecase';
+import { FfprobeService } from '../external-services/ffprobe.service';
 import { AnalyzeVodUseCase } from '../../application/use-cases/analyze-vod.usecase';
 import { ClipVodUseCase } from '../../application/use-cases/clip-vod.usecase';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
 import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositories/clip.repository.interface';
 import { TournamentRepository } from '../persistence/tournament.repository';
-import { CLIP_SET_QUEUE, CLIP_SET_JOB } from '../queues/queue.constants';
+import { CLIP_SET_QUEUE, CLIP_SET_JOB, VOD_DOWNLOAD_QUEUE } from '../queues/queue.constants';
 
 class CreateVodDto implements AddVodToTournamentInput {
   setId?: string;
@@ -33,6 +34,7 @@ export class VodController {
     private readonly addVodUseCase: AddVodToTournamentUseCase,
     private readonly analyzeVodUseCase: AnalyzeVodUseCase,
     private readonly clipVodUseCase: ClipVodUseCase,
+    private readonly ffprobe: FfprobeService,
     @Inject(VOD_REPOSITORY_TOKEN)
     private readonly vodRepository: IVodRepository,
     @Inject(CLIP_REPOSITORY_TOKEN)
@@ -41,6 +43,8 @@ export class VodController {
     private readonly tournamentRepository: TournamentRepository,
     @InjectQueue(CLIP_SET_QUEUE)
     private readonly clipQueue: Queue,
+    @InjectQueue(VOD_DOWNLOAD_QUEUE)
+    private readonly downloadQueue: Queue,
   ) {}
 
   @Post('upload')
@@ -70,6 +74,8 @@ export class VodController {
     this.logger.log(`📁 VOD uploadée: ${file.filename} (${(file.size / 1024 / 1024).toFixed(0)} MB)`);
 
     const name = body.name || path.basename(file.originalname, path.extname(file.originalname));
+    const probe = await this.ffprobe.probe(file.path).catch(() => ({ duration: 0, resolution: '1920x1080', fps: 30 }));
+
     return this.vodRepository.create({
       sourceUrl: `local:${file.originalname}`,
       filePath: file.path,
@@ -79,6 +85,9 @@ export class VodController {
       name,
       status: 'DOWNLOADED',
       fileSize: file.size,
+      duration: probe.duration,
+      resolution: probe.resolution,
+      fps: probe.fps,
     } as any);
   }
 
@@ -149,12 +158,44 @@ export class VodController {
     });
   }
 
+  @Delete(':id/file')
+  async deleteSourceFile(@Param('id') id: string) {
+    const vod = await this.vodRepository.findById(id);
+    if (!vod) throw new NotFoundException(`VOD ${id} non trouvée`);
+    if (!vod.filePath) return { message: 'Pas de fichier source' };
+
+    const filePath = path.resolve(vod.filePath);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+        this.logger.log(`🗑️ Fichier source supprimé: ${filePath}`);
+      } catch (err) {
+        throw new InternalServerErrorException(`Impossible de supprimer le fichier: ${err.message}`);
+      }
+    }
+    await this.vodRepository.update(id, { filePath: null } as any);
+    return { message: 'Fichier source supprimé' };
+  }
+
   @Delete(':id')
   async delete(@Param('id') id: string) {
     const vod = await this.vodRepository.findById(id);
     if (!vod) throw new NotFoundException(`VOD ${id} non trouvée`);
     await this.vodRepository.delete(id);
     return { message: 'VOD supprimée' };
+  }
+
+  @Get(':id/download-progress')
+  async downloadProgress(@Param('id') id: string) {
+    const active = await this.downloadQueue.getActive();
+    const activeJob = active.find(j => j.data.vodId === id);
+    if (activeJob) {
+      const progress = await activeJob.progress;
+      return { progress: typeof progress === 'number' ? progress : 0, status: 'active' };
+    }
+    const waiting = await this.downloadQueue.getWaiting();
+    if (waiting.find(j => j.data.vodId === id)) return { progress: 0, status: 'waiting' };
+    return { progress: null, status: 'unknown' };
   }
 
   @Post(':id/remux')

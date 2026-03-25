@@ -83,11 +83,14 @@ export class YouTubeController {
 
   private async runUpload(clipId: string, clip: any) {
     const title = clip.title ?? clip.roundName ?? `Set ${clip.setOrder}`;
-    const descParts: string[] = [];
-    if (clip.roundName) descParts.push(clip.roundName);
-    if (clip.players) descParts.push(clip.players);
-    if (clip.score) descParts.push(`Score : ${clip.score}`);
-    const description = descParts.join('\n');
+    let description = clip.description ?? '';
+    if (!description) {
+      const descParts: string[] = [];
+      if (clip.roundName) descParts.push(clip.roundName);
+      if (clip.players) descParts.push(clip.players);
+      if (clip.score) descParts.push(`Score : ${clip.score}`);
+      description = descParts.join('\n');
+    }
 
     try {
       const videoId = await this.youtubeService.uploadVideo({

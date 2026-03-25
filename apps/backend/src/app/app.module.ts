@@ -39,7 +39,9 @@ import { YouTubeController } from '../infrastructure/http/youtube.controller';
 import { YouTubeService } from '../infrastructure/external-services/youtube.service';
 import { ClipSetProcessor } from '../infrastructure/queues/clip-set.processor';
 import { AnalyzeChunkProcessor } from '../infrastructure/queues/analyze-chunk.processor';
-import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE } from '../infrastructure/queues/queue.constants';
+import { VodDownloadProcessor } from '../infrastructure/queues/vod-download.processor';
+import { FfprobeService } from '../infrastructure/external-services/ffprobe.service';
+import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE, VOD_DOWNLOAD_QUEUE } from '../infrastructure/queues/queue.constants';
 export { VOD_PROCESSING_QUEUE };
 
 
@@ -57,6 +59,7 @@ export { VOD_PROCESSING_QUEUE };
     }),
     BullModule.registerQueue({ name: VOD_PROCESSING_QUEUE }),
     BullModule.registerQueue({ name: CLIP_SET_QUEUE }),
+    BullModule.registerQueue({ name: VOD_DOWNLOAD_QUEUE }),
   ],
   controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController, ClipController, StartGGController, YouTubeController],
   providers: [
@@ -111,6 +114,8 @@ export { VOD_PROCESSING_QUEUE };
     GenerateClipsFromTimestampsUseCase,
     ClipSetProcessor,
     AnalyzeChunkProcessor,
+    VodDownloadProcessor,
+    FfprobeService,
     YouTubeService,
   ],
 })

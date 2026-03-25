@@ -9,6 +9,7 @@ export interface Clip {
   startSeconds: number;
   endSeconds: number;
   title?: string;
+  description?: string;
   roundName?: string;
   players?: string;
   score?: string;

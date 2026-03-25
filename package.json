@@ -88,6 +88,7 @@
     "bullmq": "^5.71.0",
     "dotenv": "^17.3.1",
     "fluent-ffmpeg": "^2.1.3",
+    "googleapis": "^171.4.0",
     "graphql": "^16.13.1",
     "graphql-tag": "^2.12.6",
     "jimp": "^0.22.12",

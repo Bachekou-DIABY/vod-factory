@@ -1,9 +1,11 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import * as fs from 'fs';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
 import { ISetRepository, SET_REPOSITORY_TOKEN } from '../../domain/repositories/set.repository.interface';
-import { IVodDownloadService, VOD_DOWNLOAD_SERVICE_TOKEN } from '../../domain/interfaces/vod-download-service.interface';
 import { VodStatus } from '../../domain/entities/vod.entity';
+import { VOD_DOWNLOAD_QUEUE, VOD_DOWNLOAD_JOB } from '../../infrastructure/queues/queue.constants';
 
 export interface AddVodToTournamentInput {
   setId?: string;
@@ -32,8 +34,8 @@ export class AddVodToTournamentUseCase {
     private readonly vodRepository: IVodRepository,
     @Inject(SET_REPOSITORY_TOKEN)
     private readonly setRepository: ISetRepository,
-    @Inject(VOD_DOWNLOAD_SERVICE_TOKEN)
-    private readonly downloadService: IVodDownloadService,
+    @InjectQueue(VOD_DOWNLOAD_QUEUE)
+    private readonly downloadQueue: Queue,
   ) {}
 
   async execute(input: AddVodToTournamentInput): Promise<AddVodToTournamentResult> {
@@ -98,11 +100,12 @@ export class AddVodToTournamentUseCase {
 
     this.logger.log(`✅ VOD créée: ${vod.id}`);
 
-    // 4. Lancer le téléchargement (async, ne bloque pas la réponse)
-    this.downloadVod(vod.id, sourceUrl).catch((err) => {
-      this.logger.error(`❌ Erreur download VOD ${vod.id}: ${err.message}`);
-      this.vodRepository.updateStatus(vod.id, VodStatus.FAILED);
+    // 4. Ajouter un job de téléchargement dans la queue BullMQ
+    await this.downloadQueue.add(VOD_DOWNLOAD_JOB, { vodId: vod.id, sourceUrl }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 10000 },
     });
+    this.logger.log(`📋 Job download enqueued pour VOD ${vod.id}`);
 
     return {
       id: vod.id,
@@ -110,7 +113,7 @@ export class AddVodToTournamentUseCase {
       eventStartGGId: vod.eventStartGGId,
       sourceUrl: vod.sourceUrl,
       status: VodStatus.DOWNLOADING,
-      message: 'VOD créée. Téléchargement en cours...',
+      message: 'VOD créée. Téléchargement en file d\'attente...',
     };
   }
 
@@ -125,38 +128,8 @@ export class AddVodToTournamentUseCase {
   }
 
   private detectSource(url: string): 'youtube' | 'twitch' | 'unknown' {
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      return 'youtube';
-    }
-    if (url.includes('twitch.tv')) {
-      return 'twitch';
-    }
+    if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
+    if (url.includes('twitch.tv')) return 'twitch';
     return 'unknown';
-  }
-
-  private async downloadVod(vodId: string, sourceUrl: string): Promise<void> {
-    this.logger.log(`⬇️ Démarrage téléchargement VOD ${vodId}`);
-
-    const result = await this.downloadService.download(
-      sourceUrl,
-      undefined, // Utilise le chemin par défaut
-      (progress) => {
-        if (progress.percent % 10 === 0) { // Log tous les 10%
-          this.logger.log(`📥 VOD ${vodId}: ${progress.percent.toFixed(0)}% (${progress.speed})`);
-        }
-      }
-    );
-
-    // Mettre à jour la VOD avec le fichier téléchargé
-    await this.vodRepository.update(vodId, {
-      filePath: result.filePath,
-      status: VodStatus.DOWNLOADED,
-      fileSize: result.fileSize,
-      duration: result.duration,
-      resolution: result.resolution,
-      recordedAt: result.recordedAt,
-    });
-
-    this.logger.log(`✅ VOD ${vodId} téléchargée: ${result.filePath}`);
   }
 }

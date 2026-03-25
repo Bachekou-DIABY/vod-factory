@@ -164,6 +164,36 @@ export class ClipController {
     });
   }
 
+  @Post(':id/retry')
+  async retry(@Param('id') id: string) {
+    const clip = await this.clipRepository.findById(id);
+    if (!clip) throw new NotFoundException(`Clip ${id} non trouvé`);
+    if (clip.status !== 'FAILED') throw new BadRequestException('Le clip doit être en FAILED pour être relancé');
+
+    const vod = await this.vodRepository.findById(clip.vodId);
+    if (!vod?.filePath) throw new NotFoundException(`VOD ${clip.vodId} sans fichier`);
+
+    const dir = path.join(process.cwd(), 'storage', 'clips');
+    const newFilePath = path.join(dir, `${id}_retry_${Date.now()}.mp4`);
+
+    await this.clipRepository.update(id, { status: 'PENDING' });
+
+    this.vodClipper.clip({
+      inputPath: vod.filePath,
+      outputPath: newFilePath,
+      startSeconds: clip.startSeconds,
+      endSeconds: clip.endSeconds,
+    }).then(async (result) => {
+      await this.clipRepository.update(id, { filePath: result.outputPath });
+      this.logger.log(`✅ Retry clip ${id} OK: ${result.outputPath}`);
+    }).catch(async () => {
+      await this.clipRepository.update(id, { status: 'FAILED' });
+      this.logger.error(`❌ Retry clip ${id} échoué`);
+    });
+
+    return { message: 'Clip en cours de re-génération...' };
+  }
+
   @Delete(':id')
   async delete(@Param('id') id: string) {
     const clip = await this.clipRepository.findById(id);

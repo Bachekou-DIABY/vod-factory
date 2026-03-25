@@ -50,6 +50,14 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
               >
                 {{ remuxing() || v.status === 'PROCESSING' ? 'Correction en cours...' : '🔧 Corriger le format' }}
               </button>
+              <button
+                (click)="deleteSourceFile()"
+                [disabled]="deletingSourceFile()"
+                class="px-3 py-1.5 bg-orange-900 hover:bg-orange-700 disabled:opacity-50 text-orange-300 rounded-lg text-xs font-medium transition-colors"
+                title="Libère l'espace disque en supprimant la VOD source (les clips générés sont conservés)"
+              >
+                {{ deletingSourceFile() ? 'Suppression...' : '🗑️ Supprimer fichier source' }}
+              </button>
             }
             <button
               (click)="deleteVod()"
@@ -59,6 +67,22 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
             </button>
           </div>
         </div>
+
+        <!-- Download progress bar -->
+        @if (v.status === 'DOWNLOADING') {
+          <div class="mb-6 bg-gray-900 border border-gray-800 rounded-xl p-4 max-w-xl">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-sm text-blue-300">Téléchargement en cours...</span>
+              @if (downloadProgress() !== null) {
+                <span class="text-sm font-mono text-blue-400">{{ downloadProgress() }}%</span>
+              }
+            </div>
+            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div class="h-2 bg-blue-500 rounded-full transition-all duration-500"
+                [style.width]="(downloadProgress() ?? 0) + '%'"></div>
+            </div>
+          </div>
+        }
 
         <!-- Video player -->
         @if (v.filePath) {
@@ -241,38 +265,49 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
             <h2 class="text-xl font-semibold mb-4">Clips ({{ clips().length }})</h2>
             <div class="grid gap-3">
               @for (clip of clips(); track clip.id) {
-                <a
-                  [routerLink]="['/clips', clip.id]"
-                  class="flex gap-4 bg-gray-900 rounded-lg p-4 hover:bg-gray-800 transition-colors border border-gray-800"
-                >
-                  <div class="shrink-0 w-32 rounded overflow-hidden bg-gray-800" style="height:72px">
-                    <img
-                      [src]="api.getClipThumbnailUrl(clip.id)"
-                      class="w-full h-full object-cover"
-                      loading="lazy"
-                      (error)="$any($event.target).style.display='none'"
-                    />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center justify-between mb-1">
-                      <div>
-                        <span class="text-sm text-gray-500 mr-2">Set {{ clip.setOrder }}</span>
-                        <span class="font-medium">{{ clip.roundName ?? 'Set ' + clip.setOrder }}</span>
-                      </div>
-                      <div class="flex items-center gap-3 text-sm shrink-0 ml-4">
-                        <span class="text-gray-400">{{ formatDuration(clip.startSeconds, clip.endSeconds) }}</span>
-                        <span class="px-2 py-0.5 rounded text-xs font-medium"
-                          [class]="clipStatusClass(clip.status)">{{ clip.status }}</span>
-                      </div>
+                <div class="flex gap-4 bg-gray-900 rounded-lg p-4 border border-gray-800">
+                  <a [routerLink]="['/clips', clip.id]" class="flex gap-4 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                    <div class="shrink-0 w-32 rounded overflow-hidden bg-gray-800" style="height:72px">
+                      <img
+                        [src]="api.getClipThumbnailUrl(clip.id)"
+                        class="w-full h-full object-cover"
+                        loading="lazy"
+                        (error)="$any($event.target).style.display='none'"
+                      />
                     </div>
-                    @if (clip.players) {
-                      <div class="text-sm text-gray-400">{{ clip.players }}</div>
-                    }
-                    @if (clip.score) {
-                      <div class="text-xs text-gray-500 mt-0.5">{{ clip.score }}</div>
-                    }
-                  </div>
-                </a>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between mb-1">
+                        <div>
+                          <span class="text-sm text-gray-500 mr-2">Set {{ clip.setOrder }}</span>
+                          <span class="font-medium">{{ clip.roundName ?? 'Set ' + clip.setOrder }}</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-sm shrink-0 ml-4">
+                          <span class="text-gray-400">{{ formatDuration(clip.startSeconds, clip.endSeconds) }}</span>
+                          <span class="px-2 py-0.5 rounded text-xs font-medium"
+                            [class]="clipStatusClass(clip.status)">{{ clip.status }}</span>
+                        </div>
+                      </div>
+                      @if (clip.players) {
+                        <div class="text-sm text-gray-400">{{ clip.players }}</div>
+                      }
+                      @if (clip.score) {
+                        <div class="text-xs text-gray-500 mt-0.5">{{ clip.score }}</div>
+                      }
+                    </div>
+                  </a>
+                  @if (clip.status === 'FAILED') {
+                    <div class="shrink-0 flex items-center ml-2">
+                      <button
+                        (click)="retryClip(clip.id)"
+                        [disabled]="retryingClipId() === clip.id"
+                        class="px-3 py-1.5 bg-red-900 hover:bg-red-700 disabled:opacity-50 text-red-300 rounded-lg text-xs font-medium transition-colors"
+                        title="Relancer la génération de ce clip"
+                      >
+                        {{ retryingClipId() === clip.id ? '...' : '↺ Retry' }}
+                      </button>
+                    </div>
+                  }
+                </div>
               }
             </div>
           </div>
@@ -293,8 +328,11 @@ export class VodDetailPage implements OnInit, OnDestroy {
   clipPlan = signal<ClipPlan | null>(null);
   loading = signal(true);
   remuxing = signal(false);
+  deletingSourceFile = signal(false);
   editingName = signal(false);
   editNameValue = '';
+  downloadProgress = signal<number | null>(null);
+  retryingClipId = signal<string | null>(null);
 
   showImportSets = signal(false);
   importingSets = signal(false);
@@ -380,7 +418,11 @@ export class VodDetailPage implements OnInit, OnDestroy {
       this.pollInterval = setInterval(() => {
         this.api.getVod(id).subscribe((v) => {
           this.vod.set(v);
+          if (v.status === 'DOWNLOADING') {
+            this.api.getDownloadProgress(id).subscribe((p) => this.downloadProgress.set(p.progress));
+          }
           if (!['DOWNLOADING', 'PROCESSING'].includes(v.status)) {
+            this.downloadProgress.set(null);
             this.stopPolling();
             this.api.getClips(id).subscribe((c) => this.clips.set(c));
           }
@@ -491,6 +533,35 @@ export class VodDetailPage implements OnInit, OnDestroy {
         }, 4000);
       },
       error: () => this.creatingManualClip.set(false),
+    });
+  }
+
+  retryClip(clipId: string) {
+    this.retryingClipId.set(clipId);
+    this.api.retryClip(clipId).subscribe({
+      next: () => {
+        this.retryingClipId.set(null);
+        const id = this.vod()!.id;
+        setTimeout(() => this.api.getClips(id).subscribe((c) => this.clips.set(c)), 1000);
+      },
+      error: () => this.retryingClipId.set(null),
+    });
+  }
+
+  deleteSourceFile() {
+    const v = this.vod();
+    if (!v || !v.filePath) return;
+    if (!confirm('Supprimer le fichier source de la VOD ? Les clips générés seront conservés.')) return;
+    this.deletingSourceFile.set(true);
+    this.api.deleteVodSourceFile(v.id).subscribe({
+      next: () => {
+        this.deletingSourceFile.set(false);
+        this.vod.set({ ...v, filePath: undefined });
+      },
+      error: (err) => {
+        this.deletingSourceFile.set(false);
+        alert(err?.error?.message ?? 'Erreur lors de la suppression du fichier');
+      },
     });
   }
 

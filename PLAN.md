@@ -84,11 +84,11 @@
 
 ## Reste à faire (backlog)
 
-- [ ] Pagination Start.gg > 50 sets par event
-- [ ] `ffprobe` pour durée/résolution réelles (actuellement 0/hardcodé)
-- [ ] Option suppression VOD source après génération clips
-- [ ] BullMQ : étendre pipeline (download + analyze en queue, pas seulement clip)
-- [ ] Support VODs locales : import fichier depuis interface (copie vers `storage/vods/`)
+- [x] Pagination Start.gg > 50 sets par event (déjà géré via `paginateEventSets()`)
+- [x] `ffprobe` pour durée/résolution réelles — `FfprobeService` appelé après download et après upload fichier
+- [x] Option suppression VOD source après génération clips — `DELETE /api/vods/:id/file` + bouton dans l'UI
+- [x] BullMQ download — `VodDownloadProcessor` sur queue `vod-download`, remplace le fire-and-forget
+- [x] Support VODs locales : import fichier depuis interface (copie vers `storage/vods/`)
 
 ---
 
@@ -113,3 +113,5 @@
 **20/03/2026** : Multi-set clipping, BullMQ workers parallèles, Clip model, nettoyage git (6.7 GB purgés)
 
 **23-24/03/2026** : Angular frontend complet, clip-review UI, streaming vidéo, YouTube OAuth upload, remux faststart, thumbnail custom, fix recut Windows
+
+**24/03/2026** : Backlog terminé — ffprobe (durée/résolution réelles), BullMQ download queue, suppression fichier source VOD, import VOD local depuis UI

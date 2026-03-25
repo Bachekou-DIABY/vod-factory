@@ -139,6 +139,15 @@ import { ApiService, Clip } from '../../services/api.service';
                 class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
                 placeholder="3 - 1" />
             </div>
+            <div class="col-span-2">
+              <label class="block text-xs text-gray-500 mb-1">
+                Description YouTube
+                <span class="text-gray-600 ml-1">(auto-générée si vide)</span>
+              </label>
+              <textarea [(ngModel)]="editDescription" rows="4"
+                class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none resize-none"
+                placeholder="Description qui apparaîtra sur YouTube..."></textarea>
+            </div>
           </div>
 
           <!-- Custom thumbnail -->
@@ -174,13 +183,23 @@ import { ApiService, Clip } from '../../services/api.service';
               </button>
               <span class="text-xs text-gray-600">Sauvegarde le titre et le round</span>
             </div>
-            <div class="flex flex-col gap-1">
-              <button (click)="approve()" [disabled]="saving()"
-                class="px-5 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
-                Approuver ✓
-              </button>
-              <span class="text-xs text-gray-600">Marque le clip comme prêt pour l'upload YouTube</span>
-            </div>
+            @if (clip()?.status !== 'APPROVED') {
+              <div class="flex flex-col gap-1">
+                <button (click)="approve()" [disabled]="saving()"
+                  class="px-5 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                  Approuver ✓
+                </button>
+                <span class="text-xs text-gray-600">Marque le clip comme prêt pour l'upload YouTube</span>
+              </div>
+            } @else {
+              <div class="flex flex-col gap-1">
+                <button (click)="disapprove()" [disabled]="saving()"
+                  class="px-5 py-2 bg-yellow-700 hover:bg-yellow-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                  Désapprouver
+                </button>
+                <span class="text-xs text-gray-600">Repasse le clip en attente (retire l'approbation)</span>
+              </div>
+            }
             <div class="flex flex-col gap-1">
               <button (click)="deleteClip()"
                 class="px-5 py-2 bg-red-900 hover:bg-red-700 text-red-300 rounded-lg text-sm font-medium transition-colors">
@@ -212,6 +231,7 @@ export class ClipReviewPage implements OnInit {
   successMsg = signal<string | null>(null);
 
   editTitle = '';
+  editDescription = '';
   editRound = '';
   editPlayers = '';
   editScore = '';
@@ -249,6 +269,7 @@ export class ClipReviewPage implements OnInit {
       next: (c) => {
         this.clip.set({ ...c, thumbnailUrl: this.api.getClipThumbnailUrl(c.id) });
         this.editTitle = c.title ?? '';
+        this.editDescription = c.description ?? '';
         this.editRound = c.roundName ?? '';
         this.editPlayers = c.players ?? '';
         this.editScore = c.score ?? '';
@@ -369,6 +390,7 @@ export class ClipReviewPage implements OnInit {
     this.saving.set(true);
     this.api.updateClip(this.clip()!.id, {
       title: this.editTitle || undefined,
+      description: this.editDescription || undefined,
       roundName: this.editRound || undefined,
       players: this.editPlayers || undefined,
       score: this.editScore || undefined,
@@ -382,6 +404,14 @@ export class ClipReviewPage implements OnInit {
     this.saving.set(true);
     this.api.updateClip(this.clip()!.id, { status: 'APPROVED' }).subscribe({
       next: (c) => { this.clip.set(c); this.saving.set(false); this.successMsg.set('Approuve ✓'); setTimeout(() => this.successMsg.set(null), 2000); },
+      error: () => this.saving.set(false),
+    });
+  }
+
+  disapprove() {
+    this.saving.set(true);
+    this.api.updateClip(this.clip()!.id, { status: 'PENDING' }).subscribe({
+      next: (c) => { this.clip.set(c); this.saving.set(false); this.successMsg.set('Désapprouvé'); setTimeout(() => this.successMsg.set(null), 2000); },
       error: () => this.saving.set(false),
     });
   }

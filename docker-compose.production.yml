@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: vod-factory-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vod_factory
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - vod-factory-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: vod-factory-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - vod-factory-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vod-factory-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/vod_factory
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      STARTGG_API_TOKEN: ${STARTGG_API_TOKEN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      YT_DLP_PATH: /usr/local/bin/yt-dlp
+      PORT: 3000
+    volumes:
+      - vod_storage:/app/storage
+    networks:
+      - vod-factory-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: vod-factory-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - vod-factory-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  vod_storage:
+
+networks:
+  vod-factory-network:
+    driver: bridge

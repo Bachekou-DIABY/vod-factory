@@ -82,6 +82,7 @@ export class YouTubeService {
       },
       status: {
         privacyStatus: params.privacyStatus ?? 'unlisted',
+        selfDeclaredMadeForKids: false,
       },
     };
 
