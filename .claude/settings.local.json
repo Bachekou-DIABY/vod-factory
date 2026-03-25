@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(docker compose:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npx nx:*)",
+      "Bash(ffmpeg -ss 38 -i \"c:/Users/bacdi/Downloads/Freelance/vod-factory/storage/vods/vod_1773960047641_- IZI ETISH \\(Palutena\\) Vs. BAC \\(Yoshi\\) - TOP 8 GRAND FINAL - SSBU.mp4\" -frames:v 1 -q:v 2 -update 1 \"c:/Users/bacdi/Downloads/Freelance/vod-factory/storage/frame_38.jpg\" -y)",
+      "Bash(ffmpeg -ss 40 -i \"c:/Users/bacdi/Downloads/Freelance/vod-factory/storage/vods/vod_1773960047641_- IZI ETISH \\(Palutena\\) Vs. BAC \\(Yoshi\\) - TOP 8 GRAND FINAL - SSBU.mp4\" -frames:v 1 -q:v 2 -update 1 \"c:/Users/bacdi/Downloads/Freelance/vod-factory/storage/frame_40.jpg\" -y)",
+      "Bash(node -e \":*)"
+    ]
+  }
+}

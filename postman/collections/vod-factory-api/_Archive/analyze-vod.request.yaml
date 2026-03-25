@@ -1,0 +1,7 @@
+$kind: http-request
+name: Analyze VOD (OCR)
+method: POST
+url: "{{baseUrl}}/vods/:id/analyze"
+pathVariables:
+  id: cmmzbj56t0000hdadyi5ot1hc
+order: 3000

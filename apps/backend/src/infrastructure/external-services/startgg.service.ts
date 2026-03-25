@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { gql } from 'graphql-tag';
 import { print } from 'graphql';
-import { IStartGGService, StartGGSetResponse } from '../../domain/services/startgg.service.interface';
+import { IStartGGService, StartGGEventResponse, StartGGSetResponse, StartGGTournamentSearchResult } from '../../domain/services/startgg.service.interface';
 import { Tournament } from '../../domain/entities/tournament.entity';
 
 interface StartGGEvent {
@@ -16,6 +16,13 @@ interface StartGGSetNode {
   fullRoundText: string;
   winnerId: number | string | null;
   displayScore: string;
+  totalGames?: number;
+  startedAt?: number;
+  completedAt?: number;
+  stream?: {
+    streamName: string;
+    streamId: string;
+  };
   slots: {
     entrant: {
       id: number | string;
@@ -67,7 +74,7 @@ export class StartGGService implements IStartGGService {
 
       return {
         name: data.name,
-        slug: data.slug,
+        slug: data.slug.replace(/^tournament\//, ''),
         startAt: new Date(data.startAt * 1000),
         endAt: new Date(data.endAt * 1000),
         startGGId: data.id.toString(),
@@ -75,6 +82,61 @@ export class StartGGService implements IStartGGService {
     } catch (error) {
       this.logger.error(`Error fetching tournament: ${error.message}`);
       throw new Error('Failed to fetch data from Start.gg');
+    }
+  }
+
+  async searchTournaments(query: string): Promise<StartGGTournamentSearchResult[]> {
+    const gqlQuery = gql`
+      query SearchTournaments($query: String!) {
+        tournaments(query: { perPage: 15, filter: { name: $query } }) {
+          nodes {
+            id
+            name
+            slug
+            startAt
+          }
+        }
+      }
+    `;
+    try {
+      const response = await axios.post(
+        this.apiUrl,
+        { query: print(gqlQuery), variables: { query } },
+        { headers: { Authorization: `Bearer ${this.apiToken}` } },
+      );
+      return (response.data?.data?.tournaments?.nodes || []).map((t: any) => ({
+        id: t.id.toString(),
+        name: t.name,
+        slug: (t.slug as string).replace(/^tournament\//, ''),
+        startAt: t.startAt,
+      }));
+    } catch (error) {
+      this.logger.error(`Error searching tournaments: ${error.message}`);
+      return [];
+    }
+  }
+
+  async getEventsByTournamentId(startGGTournamentId: string): Promise<StartGGEventResponse[]> {
+    const query = gql`
+      query GetTournamentEventsOnly($id: ID!) {
+        tournament(id: $id) {
+          events { id name }
+        }
+      }
+    `;
+    try {
+      const response = await axios.post(
+        this.apiUrl,
+        { query: print(query), variables: { id: startGGTournamentId } },
+        { headers: { Authorization: `Bearer ${this.apiToken}` } }
+      );
+      return (response.data?.data?.tournament?.events || []).map((e: StartGGEvent) => ({
+        id: e.id.toString(),
+        name: e.name,
+      }));
+    } catch (error) {
+      this.logger.error(`Error fetching events: ${error.message}`);
+      return [];
     }
   }
 
@@ -98,39 +160,36 @@ export class StartGGService implements IStartGGService {
       );
 
       const events = (eventsResponse.data?.data?.tournament?.events || []) as StartGGEvent[];
-      const allSets: StartGGSetResponse[] = [];
-
-      const popularGamesKeywords = ['ultimate', 'melee', 'rivals', 'roa', 'street', 'tekken', 'guilty', 'sf6', 'strive'];
-      
-      const filteredEvents = events.filter((e) => 
+      const popularGamesKeywords = ['ultimate', 'melee', 'rivals', 'roa', 'street', 'tekken', 'guilty', 'sf6', 'strive', 'smash', 'ssbu'];
+      const filteredEvents = events.filter((e) =>
         popularGamesKeywords.some(keyword => e.name.toLowerCase().includes(keyword))
       );
-
-      this.logger.log(`Fetching sets for ${filteredEvents.length} filtered events (out of ${events.length})...`);
-
-      for (const event of filteredEvents) {
-        const sets = await this.getSetsByEventId(event.id);
-        this.logger.log(`Fetched ${sets.length} sets for event: ${event.name}`);
-        allSets.push(...sets);
-      }
-
-      return allSets;
+      const results = await Promise.all(filteredEvents.map(e => this.getSetsByEventId(e.id)));
+      return results.flat();
     } catch (error) {
       this.logger.error(`Error in getSetsByTournamentId: ${error.message}`);
       return [];
     }
   }
 
-  private async getSetsByEventId(eventId: string): Promise<StartGGSetResponse[]> {
+  async getStreamSetsByEventId(eventStartGGId: string, streamName?: string): Promise<StartGGSetResponse[]> {
     const query = gql`
-      query GetEventSets($eventId: ID!) {
+      query GetEventStreamSets($eventId: ID!, $page: Int!) {
         event(id: $eventId) {
-          sets(page: 1, perPage: 50) {
+          sets(page: $page, perPage: 50, filters: { state: 3 }) {
+            pageInfo { totalPages }
             nodes {
               id
               fullRoundText
               winnerId
               displayScore
+              totalGames
+              startedAt
+              completedAt
+              stream {
+                streamName
+                streamId
+              }
               slots {
                 entrant {
                   id
@@ -144,34 +203,164 @@ export class StartGGService implements IStartGGService {
     `;
 
     try {
-      const response = await axios.post(
-        this.apiUrl,
-        { query: print(query), variables: { eventId } },
-        { headers: { Authorization: `Bearer ${this.apiToken}` } }
+      const allSets = await this.paginateEventSets(eventStartGGId, print(query));
+
+      const filtered = allSets.filter(
+        (s) =>
+          s.stream &&
+          s.slots?.length === 2 &&
+          s.slots[0].entrant &&
+          s.slots[1].entrant &&
+          (!streamName || s.stream.streamName.toLowerCase() === streamName.toLowerCase())
       );
 
-      const sets = (response.data?.data?.event?.sets?.nodes || []) as StartGGSetNode[];
-      
-      return sets
-        .filter((s) => s.slots && s.slots.length === 2 && s.slots[0].entrant && s.slots[1].entrant)
+      filtered.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+
+      return filtered.map((s) => ({
+        id: s.id.toString(),
+        roundName: s.fullRoundText,
+        totalGames: s.totalGames,
+        streamName: s.stream?.streamName,
+        winnerId: s.winnerId?.toString() ?? '',
+        score: s.displayScore,
+        startTime: s.startedAt ? new Date(s.startedAt * 1000).toISOString() : undefined,
+        endTime: s.completedAt ? new Date(s.completedAt * 1000).toISOString() : undefined,
+        stream: s.stream ? { streamName: s.stream.streamName, streamId: s.stream.streamId } : undefined,
+        player1: { id: s.slots[0].entrant!.id.toString(), name: s.slots[0].entrant!.name },
+        player2: { id: s.slots[1].entrant!.id.toString(), name: s.slots[1].entrant!.name },
+      }));
+    } catch (error) {
+      this.logger.error(`Error fetching stream sets for event ${eventStartGGId}: ${error.message}`);
+      return [];
+    }
+  }
+
+  async getAllSetsByEventId(eventStartGGId: string, streamName?: string): Promise<StartGGSetResponse[]> {
+    const allSets: StartGGSetNode[] = [];
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      const query = `query { event(id: ${eventStartGGId}) { sets(page: ${page}, perPage: 50) { pageInfo { totalPages } nodes { id fullRoundText winnerId displayScore totalGames startedAt completedAt stream { streamName streamId } slots { entrant { id name } } } } } }`;
+      try {
+        const response = await axios.post(
+          this.apiUrl,
+          { query },
+          { headers: { Authorization: `Bearer ${this.apiToken}` } },
+        );
+        if (response.data?.errors) {
+          this.logger.error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
+          break;
+        }
+        const data = response.data?.data?.event?.sets;
+        if (!data) break;
+        totalPages = data.pageInfo?.totalPages ?? 1;
+        allSets.push(...(data.nodes as StartGGSetNode[]));
+        page++;
+      } catch (error) {
+        this.logger.error(`Error fetching sets page ${page} for event ${eventStartGGId}: ${error.message}`);
+        break;
+      }
+    } while (page <= totalPages);
+
+    const valid = allSets.filter(
+      (s) => s.slots?.length === 2 && s.slots[0].entrant && s.slots[1].entrant &&
+        (!streamName || s.stream?.streamName?.toLowerCase() === streamName.toLowerCase()),
+    );
+    valid.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+    return valid.map((s) => ({
+      id: s.id.toString(),
+      roundName: s.fullRoundText,
+      totalGames: s.totalGames,
+      streamName: s.stream?.streamName,
+      winnerId: s.winnerId?.toString() ?? '',
+      score: s.displayScore,
+      startTime: s.startedAt ? new Date(s.startedAt * 1000).toISOString() : undefined,
+      endTime: s.completedAt ? new Date(s.completedAt * 1000).toISOString() : undefined,
+      stream: s.stream ? { streamName: s.stream.streamName, streamId: s.stream.streamId } : undefined,
+      player1: { id: s.slots[0].entrant!.id.toString(), name: s.slots[0].entrant!.name },
+      player2: { id: s.slots[1].entrant!.id.toString(), name: s.slots[1].entrant!.name },
+    }));
+  }
+
+  private async getSetsByEventId(eventId: string): Promise<StartGGSetResponse[]> {
+    const query = gql`
+      query GetEventSets($eventId: ID!, $page: Int!) {
+        event(id: $eventId) {
+          sets(page: $page, perPage: 50, filters: { state: 3 }) {
+            pageInfo { totalPages }
+            nodes {
+              id
+              fullRoundText
+              winnerId
+              displayScore
+              totalGames
+              startedAt
+              completedAt
+              stream {
+                streamName
+                streamId
+              }
+              slots {
+                entrant {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const allSets = await this.paginateEventSets(eventId, print(query));
+
+      return allSets
+        .filter((s) => s.stream && s.slots?.length === 2 && s.slots[0].entrant && s.slots[1].entrant)
         .map((s) => ({
           id: s.id.toString(),
           roundName: s.fullRoundText,
-          bestOf: 3,
+          totalGames: s.totalGames,
+          streamName: s.stream?.streamName,
           winnerId: s.winnerId?.toString(),
           score: s.displayScore,
-          player1: {
-            id: s.slots[0].entrant!.id.toString(),
-            name: s.slots[0].entrant!.name,
-          },
-          player2: {
-            id: s.slots[1].entrant!.id.toString(),
-            name: s.slots[1].entrant!.name,
-          },
+          startTime: s.startedAt ? new Date(s.startedAt * 1000).toISOString() : undefined,
+          endTime: s.completedAt ? new Date(s.completedAt * 1000).toISOString() : undefined,
+          stream: s.stream ? { streamName: s.stream.streamName, streamId: s.stream.streamId } : undefined,
+          player1: { id: s.slots[0].entrant!.id.toString(), name: s.slots[0].entrant!.name },
+          player2: { id: s.slots[1].entrant!.id.toString(), name: s.slots[1].entrant!.name },
         }));
     } catch (error) {
       this.logger.error(`Error fetching sets for event ${eventId}: ${error.message}`);
       return [];
     }
+  }
+
+  private async paginateEventSets(eventId: string, printedQuery: string): Promise<StartGGSetNode[]> {
+    const allSets: StartGGSetNode[] = [];
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      const response = await axios.post(
+        this.apiUrl,
+        { query: printedQuery, variables: { eventId, page } },
+        { headers: { Authorization: `Bearer ${this.apiToken}` } }
+      );
+
+      if (response.data?.errors) {
+        this.logger.error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
+      }
+
+      const data = response.data?.data?.event?.sets;
+      if (!data) break;
+
+      totalPages = data.pageInfo?.totalPages ?? 1;
+      allSets.push(...(data.nodes as StartGGSetNode[]));
+      page++;
+    } while (page <= totalPages);
+
+    return allSets;
   }
 }

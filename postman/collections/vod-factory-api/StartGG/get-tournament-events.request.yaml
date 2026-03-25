@@ -1,0 +1,5 @@
+$kind: http-request
+name: Get tournament events
+method: GET
+url: "{{baseUrl}}/startgg/tournaments/gones-arena/events"
+order: 2000

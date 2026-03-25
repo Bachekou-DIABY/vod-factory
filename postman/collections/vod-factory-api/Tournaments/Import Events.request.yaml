@@ -1,0 +1,7 @@
+$kind: http-request
+name: Import Events
+url: "{{baseUrl}}/tournaments/:startGGId/startgg-events"
+method: GET
+pathVariables:
+  startGGId: "867887"
+order: 3268

@@ -1,12 +1,15 @@
-import { Controller, Post, Param } from '@nestjs/common';
+import { Controller, Get, Post, Param, Inject } from '@nestjs/common';
 import { ImportTournamentUseCase } from '../../application/use-cases/import-tournament.use-case';
 import { ImportSetsUseCase } from '../../application/use-cases/import-sets.use-case';
+import { IStartGGService, STARTGG_SERVICE_TOKEN } from '../../domain/services/startgg.service.interface';
 
 @Controller('tournaments')
 export class TournamentController {
   constructor(
     private readonly importTournamentUseCase: ImportTournamentUseCase,
     private readonly importSetsUseCase: ImportSetsUseCase,
+    @Inject(STARTGG_SERVICE_TOKEN)
+    private readonly startGGService: IStartGGService,
   ) {}
 
   @Post('import/:slug')
@@ -24,5 +27,10 @@ export class TournamentController {
     return {
       message: 'Sets and players imported successfully',
     };
+  }
+
+  @Get(':startGGId/startgg-events')
+  async getStartGGEvents(@Param('startGGId') startGGId: string) {
+    return this.startGGService.getEventsByTournamentId(startGGId);
   }
 }

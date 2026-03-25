@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaService } from '../infrastructure/persistence/prisma.service';
@@ -8,18 +9,41 @@ import { PlayerRepository } from '../infrastructure/persistence/player.repositor
 import { SetRepository } from '../infrastructure/persistence/set.repository';
 import { VodRepository } from '../infrastructure/persistence/vod.repository';
 import { REPOSITORY_TOKENS } from '../domain/repositories/injection-tokens';
+import { VOD_REPOSITORY_TOKEN } from '../domain/repositories/vod.repository.interface';
+import { SET_REPOSITORY_TOKEN } from '../domain/repositories/set.repository.interface';
 import { ImportTournamentUseCase } from '../application/use-cases/import-tournament.use-case';
 import { ImportSetsUseCase } from '../application/use-cases/import-sets.use-case';
+import { AddVodToTournamentUseCase } from '../application/use-cases/add-vod-to-tournament.usecase';
+import { AnalyzeVodUseCase } from '../application/use-cases/analyze-vod.usecase';
+import { GetTournamentVodsUseCase } from '../application/use-cases/get-tournament-vods.usecase';
 import { STARTGG_SERVICE_TOKEN } from '../domain/services/startgg.service.interface';
+import { GAME_SCREEN_DETECTOR_TOKEN } from '../domain/interfaces/game-screen-detector.interface';
+import { VOD_DOWNLOAD_SERVICE_TOKEN } from '../domain/interfaces/vod-download-service.interface';
+import { YtDlpDownloadService } from '../infrastructure/external-services/yt-dlp-download.service';
 import { StartGGService } from '../infrastructure/external-services/startgg.service';
+import { OcrGameScreenDetector } from '../infrastructure/external-services/ocr-game-screen-detector.service';
+import { FfmpegVodClipper } from '../infrastructure/external-services/ffmpeg-vod-clipper.service';
+import { ClipVodUseCase } from '../application/use-cases/clip-vod.usecase';
+import { GenerateClipsFromTimestampsUseCase } from '../application/use-cases/generate-clips-from-timestamps.usecase';
+import { VOD_CLIPPER_TOKEN } from '../domain/interfaces/vod-clipper.interface';
+import { ClipRepository } from '../infrastructure/persistence/clip.repository';
+import { CLIP_REPOSITORY_TOKEN } from '../domain/repositories/clip.repository.interface';
 import { TournamentController } from '../infrastructure/http/tournament.controller';
 import { VodController } from '../infrastructure/http/vod.controller';
-import { BullModule } from '@nestjs/bullmq';
-import { QUEUE_NAMES } from '../domain/queues/queue-tokens';
-import { VideoInfoService } from '../infrastructure/external-services/video-info.service';
-import { AddVodUseCase } from '../application/use-cases/add-vod.use-case';
-import { ConfigService } from '@nestjs/config';
-import { VideoProcessingWorker } from '../infrastructure/workers/video-processing.worker';
+import { TournamentVodsController } from '../infrastructure/http/tournament-vods.controller';
+import { TournamentSetsController } from '../infrastructure/http/tournament-sets.controller';
+import { ListTournamentsController } from '../infrastructure/http/list-tournaments.controller';
+import { ClipController } from '../infrastructure/http/clip.controller';
+import { StartGGController } from '../infrastructure/http/startgg.controller';
+import { YouTubeController } from '../infrastructure/http/youtube.controller';
+import { YouTubeService } from '../infrastructure/external-services/youtube.service';
+import { ClipSetProcessor } from '../infrastructure/queues/clip-set.processor';
+import { AnalyzeChunkProcessor } from '../infrastructure/queues/analyze-chunk.processor';
+import { VodDownloadProcessor } from '../infrastructure/queues/vod-download.processor';
+import { FfprobeService } from '../infrastructure/external-services/ffprobe.service';
+import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE, VOD_DOWNLOAD_QUEUE } from '../infrastructure/queues/queue.constants';
+export { VOD_PROCESSING_QUEUE };
+
 
 @Module({
   imports: [
@@ -27,20 +51,17 @@ import { VideoProcessingWorker } from '../infrastructure/workers/video-processin
       isGlobal: true,
       envFilePath: ['.env', '.env.local'],
     }),
-    BullModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.get('REDIS_HOST', 'localhost'),
-          port: config.get('REDIS_PORT', 6379),
-        },
-      }),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+      },
     }),
-    BullModule.registerQueue({
-      name: QUEUE_NAMES.VIDEO_PROCESSING,
-    }),
+    BullModule.registerQueue({ name: VOD_PROCESSING_QUEUE }),
+    BullModule.registerQueue({ name: CLIP_SET_QUEUE }),
+    BullModule.registerQueue({ name: VOD_DOWNLOAD_QUEUE }),
   ],
-  controllers: [AppController, TournamentController, VodController],
+  controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController, ClipController, StartGGController, YouTubeController],
   providers: [
     AppService, 
     PrismaService,
@@ -57,18 +78,45 @@ import { VideoProcessingWorker } from '../infrastructure/workers/video-processin
       useClass: SetRepository,
     },
     {
-      provide: REPOSITORY_TOKENS.VOD,
+      provide: VOD_REPOSITORY_TOKEN,
       useClass: VodRepository,
+    },
+    {
+      provide: SET_REPOSITORY_TOKEN,
+      useClass: SetRepository,
     },
     ImportTournamentUseCase,
     ImportSetsUseCase,
-    AddVodUseCase,
-    VideoInfoService,
-    VideoProcessingWorker,
+    AddVodToTournamentUseCase,
+    AnalyzeVodUseCase,
+    GetTournamentVodsUseCase,
     {
       provide: STARTGG_SERVICE_TOKEN,
       useClass: StartGGService,
     },
+    {
+      provide: GAME_SCREEN_DETECTOR_TOKEN,
+      useClass: OcrGameScreenDetector,
+    },
+    {
+      provide: VOD_DOWNLOAD_SERVICE_TOKEN,
+      useClass: YtDlpDownloadService,
+    },
+    {
+      provide: VOD_CLIPPER_TOKEN,
+      useClass: FfmpegVodClipper,
+    },
+    {
+      provide: CLIP_REPOSITORY_TOKEN,
+      useClass: ClipRepository,
+    },
+    ClipVodUseCase,
+    GenerateClipsFromTimestampsUseCase,
+    ClipSetProcessor,
+    AnalyzeChunkProcessor,
+    VodDownloadProcessor,
+    FfprobeService,
+    YouTubeService,
   ],
 })
 export class AppModule {}

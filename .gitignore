@@ -1,5 +1,10 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
+# Environment variables (never commit secrets)
+.env
+.env.local
+.env.*.local
+
 # compiled output
 dist
 tmp
@@ -44,18 +49,15 @@ Thumbs.db
 
 /generated/prisma
 
-# Environment variables
-.env
-.env.*
-!.env.example
+# Storage (fichiers locaux, non versionnés)
+storage/vods/
+storage/clips/
+storage/frames/
+storage/thumbnails/
+storage/youtube-tokens.json
+.tesseract-cache/
+context.md
 
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+.angular
 
-# Database
-/prisma/*.db
-/prisma/*.db-journal
+__screenshots__/

@@ -1,0 +1,7 @@
+$kind: http-request
+name: Get Tournament Sets
+method: GET
+url: "{{baseUrl}}/tournaments/:id/sets"
+pathVariables:
+  id: cmn38ar5f0000h0upz3ypsvwc
+order: 6000

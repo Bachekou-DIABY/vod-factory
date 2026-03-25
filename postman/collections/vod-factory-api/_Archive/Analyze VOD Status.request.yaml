@@ -1,0 +1,7 @@
+$kind: http-request
+name: Analyze VOD Status
+url: "{{baseUrl}}/vods/:id"
+method: GET
+pathVariables:
+  id: cmmz4gu5a00011o0uhufls8m9
+order: 656912411282191

@@ -2,8 +2,6 @@ $kind: http-request
 name: Import Sets
 method: POST
 url: "{{baseUrl}}/tournaments/import-sets/:id"
-order: 3000
 pathVariables:
-  - key: id
-    value: "174838"
-    description: The tournament ID
+  id: cmmzbj56t0000hdadyi5ot1hc
+order: 5000

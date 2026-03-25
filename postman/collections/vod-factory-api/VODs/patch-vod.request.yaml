@@ -1,0 +1,13 @@
+$kind: http-request
+name: Patch VOD
+method: PATCH
+url: "{{baseUrl}}/vods/:id"
+pathVariables:
+  id: ""
+body:
+  type: json
+  content: |-
+    {
+      "tournamentId": ""
+    }
+order: 1100

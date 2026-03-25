@@ -10,16 +10,23 @@ export enum VodStatus {
 
 export interface Vod {
   id: string;
-  setId: string;
+  setId?: string;
+  eventStartGGId?: string;
+  streamName?: string;
+  tournamentId?: string;
+  name?: string;
   sourceUrl: string;
+  filePath?: string;
   processedUrl?: string;
   status: VodStatus;
   duration?: number;
-  fileSize?: bigint;
+  fileSize?: number;
   resolution?: string;
   fps?: number;
   startTime?: number;
   endTime?: number;
+  recordedAt?: Date;
+  events?: Record<string, any>[];
   metadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;

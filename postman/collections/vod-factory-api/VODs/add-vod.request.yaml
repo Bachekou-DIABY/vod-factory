@@ -1,0 +1,16 @@
+$kind: http-request
+name: Add VOD
+method: POST
+url: "{{baseUrl}}/vods"
+body:
+  type: json
+  content: |-
+    
+    {
+      "sourceUrl": "https://www.twitch.tv/videos/2729078712",
+      "eventStartGGId": "1548524",
+      "streamName": "cloud_army_",
+      "tournamentId": "cmn38ar5f0000h0upz3ypsvwc"
+    }
+examples: .resources/add-vod.resources/examples
+order: 1000

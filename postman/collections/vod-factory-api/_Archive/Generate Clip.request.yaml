@@ -1,0 +1,5 @@
+$kind: http-request
+name: Generate Clip
+url: "{{baseUrl}}/vods/cmmzbj56t0000hdadyi5ot1hc/clip"
+method: POST
+order: 1435704809752571

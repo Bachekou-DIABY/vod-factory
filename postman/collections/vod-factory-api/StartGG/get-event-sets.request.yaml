@@ -1,0 +1,7 @@
+$kind: http-request
+name: Get event sets (with timestamps)
+method: GET
+url: "{{baseUrl}}/startgg/events/1548524/sets?streamName=smashalezmtp"
+queryParams:
+  streamName: smashalezmtp
+order: 4000

@@ -2,6 +2,10 @@ const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
 const { join } = require('path');
 
 module.exports = {
+  watchOptions: {
+    ignored: ['**/storage/**', '**/node_modules/**'],
+  },
+  ignoreWarnings: [/Failed to parse source map/],
   output: {
     path: join(__dirname, '../../dist/apps/backend'),
     clean: true,

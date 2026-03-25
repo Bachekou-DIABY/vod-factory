@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -16,8 +17,9 @@ model Tournament {
   slug        String   @unique
   startAt     DateTime
   endAt       DateTime
-  startGGId   String?  @unique
-  createdAt   DateTime @default(now())
+  startGGId          String?  @unique
+  youtubePlaylistId  String?
+  createdAt          DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
@@ -47,7 +49,8 @@ model Set {
   id            String      @id @default(cuid())
   tournamentId  String
   roundName     String?
-  bestOf        Int         @default(3)
+  totalGames    Int?
+  streamName    String?
   winnerId      String?
   score         String?     // Format: "2-1"
   startGGId     String?     @unique
@@ -68,25 +71,80 @@ model Set {
 }
 
 model Vod {
-  id            String      @id @default(cuid())
-  setId          String
-  sourceUrl     String      // Original VOD URL (Twitch, YouTube, etc.)
-  processedUrl  String?     // Processed video URL
-  status        VodStatus   @default(PENDING)
-  duration      Int?        // Duration in seconds
-  fileSize      BigInt?     // File size in bytes
-  resolution    String?     // e.g., "1920x1080"
-  fps           Int?        // Frames per second
-  startTime     Int?        // Start time in seconds from original VOD
-  endTime       Int?        // End time in seconds from original VOD
-  metadata      Json?       // Additional metadata (stream info, etc.)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id             String    @id @default(cuid())
+  setId          String?   // Optional: set unique (cas simple)
+  eventStartGGId String?   // Start.gg event ID (VOD multi-sets)
+  streamName     String?   // Nom du channel Twitch (filtre sets)
+  tournamentId   String?   // Tournoi pour filtrage
+  name           String?   // Display name (ex: "VOD Jour 1 - Stream A")
+  sourceUrl      String    // Original VOD URL (Twitch, YouTube, etc.)
+  filePath       String?   // Local path of the downloaded file
+  processedUrl   String?   // Processed video URL
+  status         VodStatus @default(PENDING)
+  duration       Int?      // Duration in seconds
+  fileSize       BigInt?   // File size in bytes
+  resolution     String?   // e.g., "1920x1080"
+  fps            Int?      // Frames per second
+  startTime      Int?      // Start time in seconds from original VOD
+  endTime        Int?      // End time in seconds from original VOD
+  recordedAt     DateTime? // Stream start time (from yt-dlp metadata)
+  events         Json?     // Array of GameScreenEvent détectés (final, après merge)
+  totalChunks    Int?      // Nombre de chunks d'analyse
+  completedChunks Int?     @default(0)
+  metadata       Json?     // Additional metadata (stream info, etc.)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Relations
-  set           Set         @relation(fields: [setId], references: [id], onDelete: Cascade)
+  set            Set?           @relation(fields: [setId], references: [id], onDelete: SetNull)
+  clips          Clip[]
+  chunkEvents    VodChunkEvent[]
 
   @@map("vods")
+}
+
+model VodChunkEvent {
+  id         String @id @default(cuid())
+  vodId      String
+  chunkIndex Int
+  events     Json   // GameScreenEvent[] pour ce chunk
+  vod        Vod    @relation(fields: [vodId], references: [id], onDelete: Cascade)
+
+  @@unique([vodId, chunkIndex])
+  @@map("vod_chunk_events")
+}
+
+model Clip {
+  id           String     @id @default(cuid())
+  vodId        String
+  setOrder     Int        // Position du set dans la VOD (1-based)
+  setStartGGId String?    // Start.gg ID du set
+  filePath     String
+  startSeconds Int
+  endSeconds   Int
+  title          String?    // Titre éditable (ex: "Grand Final — Seidokan vs Ironsup")
+  description    String?    // Description YouTube (auto-générée ou custom)
+  roundName      String?    // Round (ex: "Winners Semi-Final")
+  players        String?    // "Player1 vs Player2"
+  score          String?    // "3 - 1"
+  thumbnailPath  String?    // Local path to thumbnail image
+  youtubeVideoId   String?    // YouTube video ID after upload
+  privacyStatus    String     @default("unlisted") // "public" | "unlisted" | "private"
+  status           ClipStatus @default(PENDING)
+  createdAt      DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  vod          Vod        @relation(fields: [vodId], references: [id], onDelete: Cascade)
+
+  @@map("clips")
+}
+
+enum ClipStatus {
+  PENDING    // Auto-cut, pas encore reviewé
+  APPROVED   // Validé par l'utilisateur, prêt pour upload
+  UPLOADING  // En cours d'upload YouTube
+  UPLOADED   // Uploadé avec succès
+  FAILED     // Erreur d'upload
 }
 
 enum VodStatus {

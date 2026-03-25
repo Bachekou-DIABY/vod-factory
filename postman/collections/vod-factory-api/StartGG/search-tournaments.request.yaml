@@ -1,0 +1,5 @@
+$kind: http-request
+name: Search tournaments
+method: GET
+url: "{{baseUrl}}/startgg/search?q=parthenon"
+order: 1000

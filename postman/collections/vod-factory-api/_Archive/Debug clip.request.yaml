@@ -1,0 +1,5 @@
+$kind: http-request
+name: Debug clip
+url: "{{baseUrl}}/vods/cmmzbj56t0000hdadyi5ot1hc/clip-plan"
+method: GET
+order: 3211408719656370

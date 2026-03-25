@@ -46,12 +46,15 @@ export class ImportSetsUseCase {
         await this.setRepository.create({
           tournamentId: tournament.id,
           roundName: externalSet.roundName,
-          bestOf: externalSet.bestOf,
+          totalGames: externalSet.totalGames,
+          streamName: externalSet.streamName,
           winnerId: externalSet.winnerId === externalSet.player1.id ? p1.id : p2.id,
           score: externalSet.score,
           startGGId: externalSet.id,
           player1Id: p1.id,
           player2Id: p2.id,
+          startTime: externalSet.startTime ? new Date(externalSet.startTime) : undefined,
+          endTime: externalSet.endTime ? new Date(externalSet.endTime) : undefined,
         });
       }
     }
