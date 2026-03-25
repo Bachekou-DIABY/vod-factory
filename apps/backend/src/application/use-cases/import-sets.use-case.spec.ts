@@ -65,7 +65,6 @@ describe('ImportSetsUseCase', () => {
       {
         id: 'sg-set-1',
         roundName: 'Winners Finals',
-        bestOf: 5,
         winnerId: 'sg-player-1',
         score: '3-0',
         player1: { id: 'sg-player-1', name: 'MkLeo', tag: 'T1' },
