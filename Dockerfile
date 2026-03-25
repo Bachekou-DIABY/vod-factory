@@ -3,10 +3,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install --ignore-scripts
+RUN npm install
 
 COPY . .
-RUN npx nx run backend:build
+RUN npx prisma generate --schema=apps/backend/prisma/schema.prisma && npx nx run backend:build
 
 # ---- Prune deps for production ----
 FROM node:20-alpine AS pruner
@@ -14,7 +14,7 @@ WORKDIR /app
 
 COPY --from=builder /app/dist/apps/backend/package.json ./
 COPY --from=builder /app/dist/apps/backend/package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm install --omit=dev --ignore-scripts
 
 # ---- Runtime ----
 FROM node:20-alpine AS runner
