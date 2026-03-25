@@ -17,8 +17,9 @@ model Tournament {
   slug        String   @unique
   startAt     DateTime
   endAt       DateTime
-  startGGId   String?  @unique
-  createdAt   DateTime @default(now())
+  startGGId          String?  @unique
+  youtubePlaylistId  String?
+  createdAt          DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
@@ -127,8 +128,9 @@ model Clip {
   players        String?    // "Player1 vs Player2"
   score          String?    // "3 - 1"
   thumbnailPath  String?    // Local path to thumbnail image
-  youtubeVideoId String?    // YouTube video ID after upload
-  status         ClipStatus @default(PENDING)
+  youtubeVideoId   String?    // YouTube video ID after upload
+  privacyStatus    String     @default("unlisted") // "public" | "unlisted" | "private"
+  status           ClipStatus @default(PENDING)
   createdAt      DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 

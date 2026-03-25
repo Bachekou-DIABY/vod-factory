@@ -73,6 +73,7 @@ export class ClipSetProcessor extends WorkerHost {
       players,
       score,
       thumbnailPath,
+      privacyStatus: 'unlisted',
       status: 'PENDING',
     });
 

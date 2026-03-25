@@ -58,25 +58,25 @@ import { ApiService, Clip } from '../../services/api.service';
               <!-- Selected range -->
               <div
                 class="absolute h-2 bg-purple-600 rounded-full pointer-events-none"
-                [style.left]="'calc(' + startPct() + '% + 8px)'"
-                [style.right]="'calc(' + (100 - endPct()) + '% + 8px)'"
+                [style.left]="thumbLeft(startPct())"
+                [style.right]="thumbRight(endPct())"
               ></div>
               <!-- Current time indicator -->
               @if (videoDuration() > 0) {
                 <div
                   class="absolute w-px h-4 bg-white/40 pointer-events-none"
-                  [style.left]="'calc(' + currentPct() + '% + 8px)'"
+                  [style.left]="thumbLeft(currentPct())"
                 ></div>
               }
               <!-- Start thumb -->
               <div
                 class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-purple-500 -translate-x-1/2 z-10 pointer-events-none"
-                [style.left]="'calc(' + startPct() + '% + 8px)'"
+                [style.left]="thumbLeft(startPct())"
               ></div>
               <!-- End thumb -->
               <div
                 class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-purple-400 -translate-x-1/2 z-10 pointer-events-none"
-                [style.left]="'calc(' + endPct() + '% + 8px)'"
+                [style.left]="thumbLeft(endPct())"
               ></div>
             </div>
 
@@ -138,6 +138,15 @@ import { ApiService, Clip } from '../../services/api.service';
               <input [(ngModel)]="editScore"
                 class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
                 placeholder="3 - 1" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Visibilité YouTube</label>
+              <select [(ngModel)]="editPrivacy"
+                class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none">
+                <option value="unlisted">Non répertorié</option>
+                <option value="public">Public</option>
+                <option value="private">Privé</option>
+              </select>
             </div>
             <div class="col-span-2">
               <label class="block text-xs text-gray-500 mb-1">
@@ -201,6 +210,13 @@ import { ApiService, Clip } from '../../services/api.service';
               </div>
             }
             <div class="flex flex-col gap-1">
+              <a [href]="api.getClipDownloadUrl(clip()!.id)" target="_blank"
+                class="px-5 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors text-center">
+                Télécharger
+              </a>
+              <span class="text-xs text-gray-600">Télécharge le fichier MP4</span>
+            </div>
+            <div class="flex flex-col gap-1">
               <button (click)="deleteClip()"
                 class="px-5 py-2 bg-red-900 hover:bg-red-700 text-red-300 rounded-lg text-sm font-medium transition-colors">
                 Supprimer
@@ -235,6 +251,7 @@ export class ClipReviewPage implements OnInit {
   editRound = '';
   editPlayers = '';
   editScore = '';
+  editPrivacy = 'unlisted';
   uploadingThumb = signal(false);
   thumbMsg = signal('');
 
@@ -263,6 +280,14 @@ export class ClipReviewPage implements OnInit {
     return d > 0 ? (this.currentTime() / d) * 100 : 0;
   }
 
+  thumbLeft(pct: number): string {
+    return `calc(8px + ${(pct / 100).toFixed(4)} * (100% - 16px))`;
+  }
+
+  thumbRight(pct: number): string {
+    return `calc(8px + ${((100 - pct) / 100).toFixed(4)} * (100% - 16px))`;
+  }
+
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id')!;
     this.api.getClip(id).subscribe({
@@ -273,6 +298,7 @@ export class ClipReviewPage implements OnInit {
         this.editRound = c.roundName ?? '';
         this.editPlayers = c.players ?? '';
         this.editScore = c.score ?? '';
+        this.editPrivacy = c.privacyStatus ?? 'unlisted';
         this.recutStart = 0;
         this.recutEnd = 0; // will be set in onMetadata
         this.loading.set(false);
@@ -394,6 +420,7 @@ export class ClipReviewPage implements OnInit {
       roundName: this.editRound || undefined,
       players: this.editPlayers || undefined,
       score: this.editScore || undefined,
+      privacyStatus: this.editPrivacy,
     }).subscribe({
       next: (c) => { this.clip.set(c); this.saving.set(false); this.successMsg.set('Sauvegarde OK'); setTimeout(() => this.successMsg.set(null), 2000); },
       error: () => this.saving.set(false),

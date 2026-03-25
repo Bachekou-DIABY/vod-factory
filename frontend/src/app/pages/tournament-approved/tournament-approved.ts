@@ -51,7 +51,11 @@ import { ApiService, Clip, Tournament } from '../../services/api.service';
         } @else {
           <!-- Upload All Button -->
           @if (ytAuthenticated() && hasUploadable()) {
-            <div class="mb-4 flex justify-end">
+            <div class="mb-4 flex justify-end gap-2">
+              <button (click)="downloadAll()"
+                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors">
+                ↓ Tout télécharger
+              </button>
               <button (click)="uploadAll()"
                 [disabled]="uploadingAll()"
                 class="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
@@ -119,6 +123,11 @@ import { ApiService, Clip, Tournament } from '../../services/api.service';
                         </button>
                       }
 
+                      <a [href]="api.getClipDownloadUrl(clip.id)" target="_blank"
+                        class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors"
+                        title="Télécharger le MP4">
+                        ↓
+                      </a>
                       <a [routerLink]="['/clips', clip.id]"
                         class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
                         Modifier
@@ -197,6 +206,17 @@ export class TournamentApprovedPage implements OnInit {
         this.clips.update(list => list.map(c => c.id === clip.id ? { ...c, status: 'FAILED' } : c));
         this.uploadMsg.set('Erreur: ' + (err.error?.message ?? err.message));
       },
+    });
+  }
+
+  downloadAll() {
+    this.clips().forEach((clip, i) => {
+      setTimeout(() => {
+        const a = document.createElement('a');
+        a.href = this.api.getClipDownloadUrl(clip.id);
+        a.download = '';
+        a.click();
+      }, i * 800);
     });
   }
 

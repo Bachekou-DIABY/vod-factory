@@ -54,6 +54,7 @@ export class ClipRepository implements IClipRepository {
       score: prismaClip.score ?? undefined,
       thumbnailPath: prismaClip.thumbnailPath ?? undefined,
       youtubeVideoId: prismaClip.youtubeVideoId ?? undefined,
+      privacyStatus: prismaClip.privacyStatus ?? 'unlisted',
       status: prismaClip.status,
       createdAt: prismaClip.createdAt,
       updatedAt: prismaClip.updatedAt,

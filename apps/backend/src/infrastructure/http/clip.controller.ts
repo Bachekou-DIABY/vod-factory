@@ -30,6 +30,8 @@ class UpdateClipDto {
   roundName?: string;
   players?: string;
   score?: string;
+  description?: string;
+  privacyStatus?: string;
   status?: ClipStatus;
   startSeconds?: number;
   endSeconds?: number;
@@ -143,6 +145,23 @@ export class ClipController {
 
     res.setHeader('Content-Type', 'image/jpeg');
     res.sendFile(path.resolve(thumbPath));
+  }
+
+  @Get(':id/download')
+  async download(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const clip = await this.clipRepository.findById(id);
+    if (!clip?.filePath || !fs.existsSync(clip.filePath)) {
+      res.status(404).json({ message: 'Fichier clip non trouvé' });
+      return;
+    }
+    const title = clip.title ?? clip.roundName ?? `clip_${id}`;
+    const safeTitle = title.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.mp4"`);
+    res.setHeader('Content-Type', 'video/mp4');
+    res.sendFile(path.resolve(clip.filePath));
   }
 
   @Get(':id/stream')

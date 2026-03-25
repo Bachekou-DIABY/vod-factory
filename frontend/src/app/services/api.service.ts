@@ -51,6 +51,7 @@ export interface Clip {
   score?: string;
   thumbnailUrl?: string;
   youtubeVideoId?: string;
+  privacyStatus?: string;
   status: string;
   createdAt: string;
 }
@@ -215,6 +216,10 @@ export class ApiService {
 
   getDownloadProgress(vodId: string): Observable<{ progress: number | null; status: string }> {
     return this.http.get<{ progress: number | null; status: string }>(`${this.base}/vods/${vodId}/download-progress`);
+  }
+
+  getClipDownloadUrl(clipId: string): string {
+    return `${this.base}/clips/${clipId}/download`;
   }
 
   retryClip(clipId: string): Observable<any> {

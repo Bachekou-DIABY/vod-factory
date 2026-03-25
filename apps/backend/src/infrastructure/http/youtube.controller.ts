@@ -13,6 +13,8 @@ import {
 import { Response } from 'express';
 import { YouTubeService } from '../external-services/youtube.service';
 import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositories/clip.repository.interface';
+import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
+import { ITournamentRepository } from '../../domain/repositories/tournament.repository.interface';
 
 @Controller()
 export class YouTubeController {
@@ -22,6 +24,10 @@ export class YouTubeController {
     private readonly youtubeService: YouTubeService,
     @Inject(CLIP_REPOSITORY_TOKEN)
     private readonly clipRepository: IClipRepository,
+    @Inject(VOD_REPOSITORY_TOKEN)
+    private readonly vodRepository: IVodRepository,
+    @Inject('ITournamentRepository')
+    private readonly tournamentRepository: ITournamentRepository,
   ) {}
 
   @Get('youtube/auth-url')
@@ -98,7 +104,7 @@ export class YouTubeController {
         title,
         description,
         thumbnailPath: clip.thumbnailPath,
-        privacyStatus: 'unlisted',
+        privacyStatus: (clip.privacyStatus ?? 'unlisted') as 'public' | 'unlisted' | 'private',
       });
 
       await this.clipRepository.update(clipId, {
@@ -107,9 +113,33 @@ export class YouTubeController {
       });
 
       this.logger.log(`✅ Clip ${clipId} uploadé → https://youtu.be/${videoId}`);
+
+      // Add to tournament playlist
+      await this.addToTournamentPlaylist(clip, videoId);
     } catch (err) {
       this.logger.error(`❌ Upload clip ${clipId} échoué: ${(err as Error).message}`);
       await this.clipRepository.update(clipId, { status: 'FAILED' });
+    }
+  }
+
+  private async addToTournamentPlaylist(clip: any, videoId: string): Promise<void> {
+    try {
+      const vod = await this.vodRepository.findById(clip.vodId);
+      if (!vod?.tournamentId) return;
+
+      const tournament = await this.tournamentRepository.findById(vod.tournamentId);
+      if (!tournament) return;
+
+      let playlistId = tournament.youtubePlaylistId;
+      if (!playlistId) {
+        playlistId = await this.youtubeService.createPlaylist(tournament.name);
+        await this.tournamentRepository.update(tournament.id, { youtubePlaylistId: playlistId });
+      }
+
+      await this.youtubeService.addToPlaylist(playlistId, videoId);
+    } catch (err) {
+      // Playlist failure should not fail the upload
+      this.logger.warn(`Playlist add failed: ${(err as Error).message}`);
     }
   }
 }

@@ -15,6 +15,7 @@ export interface Clip {
   score?: string;
   thumbnailPath?: string;
   youtubeVideoId?: string;
+  privacyStatus: string;
   status: ClipStatus;
   createdAt: Date;
   updatedAt: Date;

@@ -295,8 +295,8 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                       }
                     </div>
                   </a>
-                  @if (clip.status === 'FAILED') {
-                    <div class="shrink-0 flex items-center ml-2">
+                  <div class="shrink-0 flex items-center gap-2 ml-2">
+                    @if (clip.status === 'FAILED') {
                       <button
                         (click)="retryClip(clip.id)"
                         [disabled]="retryingClipId() === clip.id"
@@ -305,8 +305,15 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                       >
                         {{ retryingClipId() === clip.id ? '...' : '↺ Retry' }}
                       </button>
-                    </div>
-                  }
+                    }
+                    @if (clip.filePath) {
+                      <a [href]="api.getClipDownloadUrl(clip.id)" target="_blank"
+                        class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors"
+                        title="Télécharger le MP4">
+                        ↓
+                      </a>
+                    }
+                  </div>
                 </div>
               }
             </div>

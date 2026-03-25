@@ -478,6 +478,7 @@ export class ClipVodUseCase {
       filePath: result.outputPath,
       startSeconds,
       endSeconds,
+      privacyStatus: 'unlisted',
       status: 'PENDING',
     });
 

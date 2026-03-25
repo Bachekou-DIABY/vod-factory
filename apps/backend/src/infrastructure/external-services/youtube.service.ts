@@ -6,7 +6,10 @@ import * as path from 'path';
 
 const TOKENS_PATH = path.join(process.cwd(), 'storage', 'youtube-tokens.json');
 const REDIRECT_URI = 'http://localhost:3000/api/youtube/callback';
-const SCOPES = ['https://www.googleapis.com/auth/youtube.upload'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/youtube.upload',
+  'https://www.googleapis.com/auth/youtube',
+];
 
 @Injectable()
 export class YouTubeService {
@@ -115,5 +118,35 @@ export class YouTubeService {
     }
 
     return videoId;
+  }
+
+  async createPlaylist(title: string): Promise<string> {
+    const client = this.loadClient();
+    const yt = google.youtube({ version: 'v3', auth: client });
+    const res = await yt.playlists.insert({
+      part: ['snippet', 'status'],
+      requestBody: {
+        snippet: { title },
+        status: { privacyStatus: 'public' },
+      },
+    });
+    const playlistId = res.data.id!;
+    this.logger.log(`📋 Playlist créée: ${playlistId} — "${title}"`);
+    return playlistId;
+  }
+
+  async addToPlaylist(playlistId: string, videoId: string): Promise<void> {
+    const client = this.loadClient();
+    const yt = google.youtube({ version: 'v3', auth: client });
+    await yt.playlistItems.insert({
+      part: ['snippet'],
+      requestBody: {
+        snippet: {
+          playlistId,
+          resourceId: { kind: 'youtube#video', videoId },
+        },
+      },
+    });
+    this.logger.log(`➕ Vidéo ${videoId} ajoutée à la playlist ${playlistId}`);
   }
 }
