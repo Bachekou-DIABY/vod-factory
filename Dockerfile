@@ -30,6 +30,7 @@ RUN apk add --no-cache ffmpeg python3 py3-pip curl openssl && \
 COPY --from=builder /app/dist/apps/backend/main.js ./
 COPY --from=builder /app/apps/backend/prisma ./prisma/
 COPY --from=pruner /app/node_modules ./node_modules/
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Storage directories
 RUN mkdir -p storage/vods storage/clips storage/thumbnails
