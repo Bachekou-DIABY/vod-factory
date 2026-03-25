@@ -57,6 +57,14 @@ export class VodRepository implements IVodRepository {
     return VodMapper.toDomain(updated);
   }
 
+  async updateStatus(id: string, status: VodStatus): Promise<Vod> {
+    const updated = await this.prisma.vod.update({
+      where: { id },
+      data: { status: status as unknown as PrismaVodStatus },
+    });
+    return VodMapper.toDomain(updated);
+  }
+
   async delete(id: string): Promise<void> {
     await this.prisma.vod.delete({
       where: { id },

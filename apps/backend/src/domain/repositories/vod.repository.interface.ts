@@ -9,6 +9,8 @@ export interface IVodRepository {
   findByTournamentId(tournamentId: string): Promise<Vod[]>;
   findByStatus(status: VodStatus): Promise<Vod[]>;
   update(id: string, data: Partial<Vod>): Promise<Vod>;
+  updateStatus(id: string, status: VodStatus): Promise<Vod>;
   delete(id: string): Promise<void>;
   findAll(): Promise<Vod[]>;
+  findPendingProcessing(): Promise<Vod[]>;
 }

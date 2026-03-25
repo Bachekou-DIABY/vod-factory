@@ -95,6 +95,7 @@
     "prisma": "^5.22.0",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0",
-    "tesseract.js": "^5.1.1"
+    "tesseract.js": "^5.1.1",
+    "yt-dlp-wrap": "^2.3.12"
   }
 }
