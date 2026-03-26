@@ -218,13 +218,30 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                   />
                   <button
                     (click)="fetchTimestamp()"
-                    [disabled]="fetchingTimestamp()"
-                    class="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg text-xs font-medium transition-colors shrink-0"
-                    title="Récupérer automatiquement depuis l'URL de la VOD"
+                    [disabled]="fetchingTimestamp() || (isLocalVod() && !timestampUrl.trim())"
+                    class="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors shrink-0"
+                    [title]="isLocalVod() && !timestampUrl.trim() ? 'Renseigne URL du stream ci-dessous' : 'Recuperer automatiquement depuis URL de la VOD'"
                   >
                     {{ fetchingTimestamp() ? '...' : '🔍 Auto' }}
                   </button>
                 </div>
+                @if (isLocalVod()) {
+                  <div class="mt-2">
+                    <label class="block text-xs text-gray-500 mb-1">
+                      URL du stream original
+                      <span class="text-gray-600 ml-1">(pour récupérer le timestamp automatiquement)</span>
+                    </label>
+                    <input
+                      type="text"
+                      [(ngModel)]="timestampUrl"
+                      placeholder="https://www.twitch.tv/videos/... ou YouTube"
+                      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    />
+                    <p class="text-xs text-gray-600 mt-1">
+                      Sans URL : renseigne le timestamp manuellement, ou utilise le recut clip par clip.
+                    </p>
+                  </div>
+                }
               </div>
               <div>
                 <label class="block text-xs text-gray-400 mb-1">
@@ -357,6 +374,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
   retryingClipId = signal<string | null>(null);
   deletingClipId = signal<string | null>(null);
   fetchingTimestamp = signal(false);
+  timestampUrl = '';
 
   showImportSets = signal(false);
   importingSets = signal(false);
@@ -375,6 +393,11 @@ export class VodDetailPage implements OnInit, OnDestroy {
   creatingManualClip = signal(false);
   manualClipMsg = signal('');
   private manualDragging: 'start' | 'end' | null = null;
+
+  isLocalVod(): boolean {
+    const url = this.vod()?.sourceUrl ?? '';
+    return url.startsWith('local:') || url.startsWith('/');
+  }
 
   thumbPos(pct: number): string {
     return `calc(8px + ${pct / 100} * (100% - 16px))`;
@@ -581,8 +604,10 @@ export class VodDetailPage implements OnInit, OnDestroy {
   fetchTimestamp() {
     const v = this.vod();
     if (!v) return;
+    const url = this.isLocalVod() ? this.timestampUrl.trim() : undefined;
+    if (this.isLocalVod() && !url) return;
     this.fetchingTimestamp.set(true);
-    this.api.fetchVodTimestamp(v.id).subscribe({
+    this.api.fetchVodTimestamp(v.id, url).subscribe({
       next: ({ timestamp }) => {
         this.importRecordedAt = timestamp;
         this.fetchingTimestamp.set(false);

@@ -222,8 +222,9 @@ export class ApiService {
     return `${this.base}/clips/${clipId}/download`;
   }
 
-  fetchVodTimestamp(vodId: string): Observable<{ timestamp: number }> {
-    return this.http.get<{ timestamp: number }>(`${this.base}/vods/${vodId}/fetch-timestamp`);
+  fetchVodTimestamp(vodId: string, url?: string): Observable<{ timestamp: number }> {
+    const params = url ? `?url=${encodeURIComponent(url)}` : '';
+    return this.http.get<{ timestamp: number }>(`${this.base}/vods/${vodId}/fetch-timestamp${params}`);
   }
 
   retryClip(clipId: string): Observable<any> {

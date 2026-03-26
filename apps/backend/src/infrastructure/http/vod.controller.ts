@@ -1,4 +1,4 @@
-import { Controller, Post, Patch, Body, Get, Param, Inject, Logger, Res, NotFoundException, Delete, BadRequestException, UseInterceptors, UploadedFile, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Get, Param, Query, Inject, Logger, Res, NotFoundException, Delete, BadRequestException, UseInterceptors, UploadedFile, InternalServerErrorException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -240,14 +240,17 @@ export class VodController {
   }
 
   @Get(':id/fetch-timestamp')
-  async fetchTimestamp(@Param('id') id: string) {
+  async fetchTimestamp(@Param('id') id: string, @Query('url') overrideUrl?: string) {
     const vod = await this.vodRepository.findById(id);
     if (!vod) throw new NotFoundException(`VOD ${id} non trouvée`);
-    if (vod.sourceUrl.startsWith('local:') || vod.sourceUrl.startsWith('/')) {
-      throw new BadRequestException('Pas de timestamp disponible pour les VODs locales');
-    }
+    const url = overrideUrl?.trim() || (
+      (vod.sourceUrl.startsWith('local:') || vod.sourceUrl.startsWith('/'))
+        ? null
+        : vod.sourceUrl
+    );
+    if (!url) throw new BadRequestException('Fournis l\'URL du stream pour récupérer le timestamp');
     return new Promise((resolve, reject) => {
-      const proc = spawn('yt-dlp', ['--print', '%(timestamp)s', '--no-playlist', vod.sourceUrl]);
+      const proc = spawn('yt-dlp', ['--print', '%(timestamp)s', '--no-playlist', url]);
       let output = '';
       proc.stdout.on('data', (d: Buffer) => { output += d.toString(); });
       proc.on('close', () => {
