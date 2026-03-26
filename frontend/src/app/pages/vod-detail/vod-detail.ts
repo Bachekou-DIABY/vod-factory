@@ -119,20 +119,20 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                 <div class="absolute inset-x-2 h-2 bg-gray-700 rounded-full"></div>
                 <div
                   class="absolute h-2 bg-blue-600 rounded-full pointer-events-none"
-                  [style.left]="'calc(' + manualStartPct() + '% + 8px)'"
-                  [style.right]="'calc(' + (100 - manualEndPct()) + '% + 8px)'"
+                  [style.left]="thumbPos(manualStartPct())"
+                  [style.right]="thumbPos(100 - manualEndPct())"
                 ></div>
                 <div
                   class="absolute w-px h-4 bg-white/40 pointer-events-none"
-                  [style.left]="'calc(' + vodCurrentPct() + '% + 8px)'"
+                  [style.left]="thumbPos(vodCurrentPct())"
                 ></div>
                 <div
                   class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-blue-500 -translate-x-1/2 z-10 pointer-events-none"
-                  [style.left]="'calc(' + manualStartPct() + '% + 8px)'"
+                  [style.left]="thumbPos(manualStartPct())"
                 ></div>
                 <div
                   class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-blue-400 -translate-x-1/2 z-10 pointer-events-none"
-                  [style.left]="'calc(' + manualEndPct() + '% + 8px)'"
+                  [style.left]="thumbPos(manualEndPct())"
                 ></div>
               </div>
 
@@ -209,15 +209,22 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                   Heure de début du stream
                   <span class="text-gray-600 ml-1">(optionnel — si les clips sont décalés)</span>
                 </label>
-                <p class="text-xs text-gray-600 mb-1">
-                  Obtiens-le avec : <code class="bg-gray-700 px-1 rounded text-gray-300">yt-dlp --print "%(timestamp)s" [URL]</code>
-                </p>
-                <input
-                  type="number"
-                  [(ngModel)]="importRecordedAt"
-                  placeholder="ex: 1742654400 (laisser à 0 si inconnu)"
-                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                />
+                <div class="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    [(ngModel)]="importRecordedAt"
+                    placeholder="ex: 1742654400 (laisser à 0 si inconnu)"
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                  />
+                  <button
+                    (click)="fetchTimestamp()"
+                    [disabled]="fetchingTimestamp()"
+                    class="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg text-xs font-medium transition-colors shrink-0"
+                    title="Récupérer automatiquement depuis l'URL de la VOD"
+                  >
+                    {{ fetchingTimestamp() ? '...' : '🔍 Auto' }}
+                  </button>
+                </div>
               </div>
               <div>
                 <label class="block text-xs text-gray-400 mb-1">
@@ -313,6 +320,14 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                         ↓
                       </a>
                     }
+                    <button
+                      (click)="deleteClip($event, clip.id)"
+                      [disabled]="deletingClipId() === clip.id"
+                      class="px-3 py-1.5 bg-red-950 hover:bg-red-800 disabled:opacity-50 text-red-400 rounded-lg text-xs font-medium transition-colors"
+                      title="Supprimer ce clip"
+                    >
+                      {{ deletingClipId() === clip.id ? '...' : '🗑' }}
+                    </button>
                   </div>
                 </div>
               }
@@ -340,6 +355,8 @@ export class VodDetailPage implements OnInit, OnDestroy {
   editNameValue = '';
   downloadProgress = signal<number | null>(null);
   retryingClipId = signal<string | null>(null);
+  deletingClipId = signal<string | null>(null);
+  fetchingTimestamp = signal(false);
 
   showImportSets = signal(false);
   importingSets = signal(false);
@@ -358,6 +375,10 @@ export class VodDetailPage implements OnInit, OnDestroy {
   creatingManualClip = signal(false);
   manualClipMsg = signal('');
   private manualDragging: 'start' | 'end' | null = null;
+
+  thumbPos(pct: number): string {
+    return `calc(8px + ${pct / 100} * (100% - 16px))`;
+  }
 
   manualStartPct() {
     const d = this.vodDuration();
@@ -540,6 +561,33 @@ export class VodDetailPage implements OnInit, OnDestroy {
         }, 4000);
       },
       error: () => this.creatingManualClip.set(false),
+    });
+  }
+
+  deleteClip(e: Event, clipId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm('Supprimer ce clip ?')) return;
+    this.deletingClipId.set(clipId);
+    this.api.deleteClip(clipId).subscribe({
+      next: () => {
+        this.deletingClipId.set(null);
+        this.clips.update(c => c.filter(x => x.id !== clipId));
+      },
+      error: () => this.deletingClipId.set(null),
+    });
+  }
+
+  fetchTimestamp() {
+    const v = this.vod();
+    if (!v) return;
+    this.fetchingTimestamp.set(true);
+    this.api.fetchVodTimestamp(v.id).subscribe({
+      next: ({ timestamp }) => {
+        this.importRecordedAt = timestamp;
+        this.fetchingTimestamp.set(false);
+      },
+      error: () => this.fetchingTimestamp.set(false),
     });
   }
 

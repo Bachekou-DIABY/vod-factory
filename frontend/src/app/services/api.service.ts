@@ -222,6 +222,10 @@ export class ApiService {
     return `${this.base}/clips/${clipId}/download`;
   }
 
+  fetchVodTimestamp(vodId: string): Observable<{ timestamp: number }> {
+    return this.http.get<{ timestamp: number }>(`${this.base}/vods/${vodId}/fetch-timestamp`);
+  }
+
   retryClip(clipId: string): Observable<any> {
     return this.http.post(`${this.base}/clips/${clipId}/retry`, {}).pipe(
       tap(() => { this.invalidate(`clip:${clipId}`); this.invalidate('clips:'); }),

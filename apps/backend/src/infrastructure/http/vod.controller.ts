@@ -239,6 +239,26 @@ export class VodController {
     });
   }
 
+  @Get(':id/fetch-timestamp')
+  async fetchTimestamp(@Param('id') id: string) {
+    const vod = await this.vodRepository.findById(id);
+    if (!vod) throw new NotFoundException(`VOD ${id} non trouvée`);
+    if (vod.sourceUrl.startsWith('local:') || vod.sourceUrl.startsWith('/')) {
+      throw new BadRequestException('Pas de timestamp disponible pour les VODs locales');
+    }
+    return new Promise((resolve, reject) => {
+      const proc = spawn('yt-dlp', ['--print', '%(timestamp)s', '--no-playlist', vod.sourceUrl]);
+      let output = '';
+      proc.stdout.on('data', (d: Buffer) => { output += d.toString(); });
+      proc.on('close', () => {
+        const ts = parseInt(output.trim());
+        if (isFinite(ts) && ts > 0) resolve({ timestamp: ts });
+        else reject(new BadRequestException('Impossible de récupérer le timestamp depuis l\'URL'));
+      });
+      proc.on('error', () => reject(new BadRequestException('yt-dlp non disponible')));
+    });
+  }
+
   @Post(':id/manual-clip')
   async manualClip(
     @Param('id') id: string,

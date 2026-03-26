@@ -32,7 +32,11 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
         <!-- Add VOD form -->
         @if (showAddForm()) {
           <div class="mb-8 bg-gray-900 border border-gray-700 rounded-xl p-5">
-            <h2 class="text-sm font-semibold text-gray-300 mb-4">Importer une VOD</h2>
+            <h2 class="text-sm font-semibold text-gray-300 mb-1">Importer une VOD</h2>
+            <p class="text-xs text-gray-500 mb-4">
+              Associe une VOD à cet event Start.gg pour pouvoir générer des clips automatiquement.
+              <span class="text-gray-600">Les clips sont calculés à partir des timestamps des sets.</span>
+            </p>
 
             <!-- Mode toggle -->
             <div class="flex gap-1 mb-4 bg-gray-800 rounded-lg p-1 w-fit">
@@ -63,6 +67,10 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
               @if (importMode() === 'file') {
                 <div>
                   <label class="block text-xs text-gray-500 mb-1">Fichier vidéo</label>
+                  <p class="text-xs text-gray-600 mb-2">
+                    Pour que les clips soient bien alignés, tu devras renseigner l'heure de début du stream
+                    (timestamp Unix) dans la page de la VOD après import.
+                  </p>
                   <div class="flex items-center gap-3">
                     <label class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium cursor-pointer transition-colors">
                       Choisir un fichier
@@ -157,19 +165,29 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
               }
               <div class="grid gap-3 mb-4">
                 @for (vod of streamGroup.vods; track vod.id) {
-                  <a
-                    [routerLink]="['/vods', vod.id]"
-                    class="block bg-gray-900 rounded-xl p-4 hover:bg-gray-800 transition-colors border border-gray-800"
-                  >
-                    <div class="flex items-center justify-between">
-                      <div class="truncate max-w-xl text-sm text-gray-300">{{ vod.name || vod.sourceUrl }}</div>
-                      <span class="ml-4 shrink-0 px-3 py-1 rounded-full text-xs font-medium"
-                        [class]="statusClass(vod.status)">{{ vod.status }}</span>
-                    </div>
-                    @if (vod.streamName) {
-                      <div class="text-xs text-gray-600 mt-1">{{ vod.streamName }}</div>
-                    }
-                  </a>
+                  <div class="flex items-center gap-2 bg-gray-900 rounded-xl border border-gray-800 hover:border-gray-700 transition-colors">
+                    <a
+                      [routerLink]="['/vods', vod.id]"
+                      class="flex-1 min-w-0 p-4"
+                    >
+                      <div class="flex items-center justify-between">
+                        <div class="truncate max-w-xl text-sm text-gray-300">{{ vod.name || vod.sourceUrl }}</div>
+                        <span class="ml-4 shrink-0 px-3 py-1 rounded-full text-xs font-medium"
+                          [class]="statusClass(vod.status)">{{ vod.status }}</span>
+                      </div>
+                      @if (vod.streamName) {
+                        <div class="text-xs text-gray-600 mt-1">{{ vod.streamName }}</div>
+                      }
+                    </a>
+                    <button
+                      (click)="deleteVod(vod.id)"
+                      [disabled]="deletingVodId() === vod.id"
+                      class="shrink-0 mr-3 px-2 py-1.5 bg-red-950 hover:bg-red-800 disabled:opacity-50 text-red-400 rounded-lg text-xs transition-colors"
+                      title="Supprimer cette VOD"
+                    >
+                      {{ deletingVodId() === vod.id ? '...' : '🗑' }}
+                    </button>
+                  </div>
                 }
               </div>
             }
@@ -199,6 +217,7 @@ export class TournamentDetailPage implements OnInit {
   addError = signal('');
   selectedFile = signal<File | null>(null);
   uploadProgress = signal(0);
+  deletingVodId = signal<string | null>(null);
 
   /** VODs regroupées par event puis par stream */
   vodsByEvent = computed(() => {
@@ -309,6 +328,18 @@ export class TournamentDetailPage implements OnInit {
         this.addingVod.set(false);
         this.uploadProgress.set(0);
       },
+    });
+  }
+
+  deleteVod(vodId: string) {
+    if (!confirm('Supprimer cette VOD et tous ses clips ?')) return;
+    this.deletingVodId.set(vodId);
+    this.api.deleteVod(vodId).subscribe({
+      next: () => {
+        this.deletingVodId.set(null);
+        this.vods.update(v => v.filter(x => x.id !== vodId));
+      },
+      error: () => this.deletingVodId.set(null),
     });
   }
 
