@@ -34,7 +34,7 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 RUN mkdir -p storage/vods storage/clips storage/thumbnails
 
 ENV NODE_ENV=production
-ENV YT_DLP_PATH=/usr/local/bin/yt-dlp
+ENV YT_DLP_PATH=yt-dlp
 
 EXPOSE 3000
 

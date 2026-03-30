@@ -59,6 +59,15 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                 {{ deletingSourceFile() ? 'Suppression...' : '🗑️ Supprimer fichier source' }}
               </button>
             }
+            @if (v.status === 'FAILED') {
+              <button
+                (click)="retryDownload()"
+                [disabled]="retryingDownload()"
+                class="px-3 py-1.5 bg-blue-800 hover:bg-blue-700 disabled:opacity-50 text-blue-200 rounded-lg text-xs font-medium transition-colors"
+              >
+                {{ retryingDownload() ? '...' : '↺ Relancer le téléchargement' }}
+              </button>
+            }
             <button
               (click)="deleteVod()"
               class="px-3 py-1.5 bg-red-900 hover:bg-red-700 text-red-300 rounded-lg text-xs font-medium transition-colors"
