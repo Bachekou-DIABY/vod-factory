@@ -50,17 +50,21 @@ export class YtDlpDownloadService implements IVodDownloadService {
 
       const ytDlp = spawn(process.env.YT_DLP_PATH || 'yt-dlp', args);
       
+      ytDlp.on('error', (err) => {
+        reject(new Error(`yt-dlp introuvable ou non exécutable: ${err.message}. Vérifiez l'installation de yt-dlp dans le container.`));
+      });
+
       ytDlp.stdout.on('data', (data) => {
         const line = data.toString();
         if (line.includes('[download]') && onProgress) {
           const progress = this.parseProgress(line);
           if (progress) onProgress(progress);
         }
-        this.logger.debug(line.trim());
+        this.logger.log(`yt-dlp: ${line.trim()}`);
       });
 
       ytDlp.stderr.on('data', (data) => {
-        this.logger.warn(`yt-dlp: ${data.toString().trim()}`);
+        this.logger.warn(`yt-dlp stderr: ${data.toString().trim()}`);
       });
 
       ytDlp.on('close', async (code) => {
@@ -126,6 +130,8 @@ export class YtDlpDownloadService implements IVodDownloadService {
       ]);
 
       let output = '';
+
+      ytDlp.on('error', (err) => reject(new Error(`yt-dlp spawn failed: ${err.message}`)));
 
       ytDlp.stdout.on('data', (data) => {
         output += data.toString();
