@@ -14,7 +14,7 @@ import { ClipVodUseCase } from '../../application/use-cases/clip-vod.usecase';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
 import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositories/clip.repository.interface';
 import { TournamentRepository } from '../persistence/tournament.repository';
-import { CLIP_SET_QUEUE, CLIP_SET_JOB, VOD_DOWNLOAD_QUEUE } from '../queues/queue.constants';
+import { CLIP_SET_QUEUE, CLIP_SET_JOB, VOD_DOWNLOAD_QUEUE, VOD_DOWNLOAD_JOB } from '../queues/queue.constants';
 
 class CreateVodDto implements AddVodToTournamentInput {
   setId?: string;
