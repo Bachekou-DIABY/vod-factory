@@ -1,6 +1,7 @@
 import { Component, inject, signal, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
 
 @Component({
@@ -305,10 +306,49 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
         <!-- Clips -->
         @if (clips().length) {
           <div id="clips-section">
-            <h2 class="text-xl font-semibold mb-4">Clips ({{ clips().length }})</h2>
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xl font-semibold">Clips ({{ clips().length }})</h2>
+              <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+                  <input type="checkbox"
+                    [checked]="selectedClipIds().size === clips().length && clips().length > 0"
+                    (change)="toggleSelectAll()"
+                    class="w-4 h-4 rounded accent-purple-500"
+                  />
+                  Tout sélectionner
+                </label>
+              </div>
+            </div>
+
+            @if (selectedClipIds().size > 0) {
+              <div class="flex items-center gap-3 mb-4 p-3 bg-gray-900 border border-gray-700 rounded-xl flex-wrap">
+                <span class="text-sm text-gray-400">{{ selectedClipIds().size }} sélectionné(s)</span>
+                <button (click)="bulkApprove()" [disabled]="bulkActing()"
+                  class="px-3 py-1.5 bg-green-800 hover:bg-green-700 disabled:opacity-50 text-green-200 rounded-lg text-xs font-medium transition-colors">
+                  {{ bulkActing() ? '...' : '✓ Approuver' }}
+                </button>
+                <button (click)="bulkDisapprove()" [disabled]="bulkActing()"
+                  class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-300 rounded-lg text-xs font-medium transition-colors">
+                  {{ bulkActing() ? '...' : '✕ Désapprouver' }}
+                </button>
+                <button (click)="bulkDelete()" [disabled]="bulkActing()"
+                  class="px-3 py-1.5 bg-red-900 hover:bg-red-700 disabled:opacity-50 text-red-300 rounded-lg text-xs font-medium transition-colors">
+                  {{ bulkActing() ? '...' : '🗑 Supprimer' }}
+                </button>
+                <button (click)="clearSelection()" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+                  Annuler
+                </button>
+              </div>
+            }
+
             <div class="grid gap-3">
               @for (clip of clips(); track clip.id) {
-                <div class="flex gap-4 bg-gray-900 rounded-lg p-4 border border-gray-800">
+                <div class="flex gap-4 bg-gray-900 rounded-lg p-4 border transition-colors"
+                  [class]="isSelected(clip.id) ? 'border-purple-600 bg-gray-800' : 'border-gray-800'">
+                  <div class="flex items-center shrink-0">
+                    <input type="checkbox" [checked]="isSelected(clip.id)" (change)="toggleClipSelection(clip.id)"
+                      class="w-4 h-4 rounded accent-purple-500 cursor-pointer" />
+                  </div>
                   <a [routerLink]="['/clips', clip.id]" class="flex gap-4 flex-1 min-w-0 hover:opacity-80 transition-opacity">
                     <div class="shrink-0 w-32 rounded overflow-hidden bg-gray-800" style="height:72px">
                       <img
@@ -395,6 +435,8 @@ export class VodDetailPage implements OnInit, OnDestroy {
   deletingClipId = signal<string | null>(null);
   fetchingTimestamp = signal(false);
   timestampUrl = '';
+  selectedClipIds = signal<Set<string>>(new Set());
+  bulkActing = signal(false);
 
   showImportSets = signal(false);
   importingSets = signal(false);
@@ -630,8 +672,77 @@ export class VodDetailPage implements OnInit, OnDestroy {
       next: () => {
         this.deletingClipId.set(null);
         this.clips.update(c => c.filter(x => x.id !== clipId));
+        this.selectedClipIds.update(s => { s.delete(clipId); return new Set(s); });
       },
       error: () => this.deletingClipId.set(null),
+    });
+  }
+
+  toggleClipSelection(clipId: string) {
+    this.selectedClipIds.update(s => {
+      const next = new Set(s);
+      next.has(clipId) ? next.delete(clipId) : next.add(clipId);
+      return next;
+    });
+  }
+
+  isSelected(clipId: string): boolean {
+    return this.selectedClipIds().has(clipId);
+  }
+
+  toggleSelectAll() {
+    const all = this.clips().map(c => c.id);
+    if (this.selectedClipIds().size === all.length) {
+      this.selectedClipIds.set(new Set());
+    } else {
+      this.selectedClipIds.set(new Set(all));
+    }
+  }
+
+  clearSelection() {
+    this.selectedClipIds.set(new Set());
+  }
+
+  bulkApprove() {
+    const ids = [...this.selectedClipIds()];
+    if (!ids.length) return;
+    this.bulkActing.set(true);
+    forkJoin(ids.map(id => this.api.updateClip(id, { status: 'APPROVED' }))).subscribe({
+      next: () => {
+        this.clips.update(cs => cs.map(c => ids.includes(c.id) ? { ...c, status: 'APPROVED' } : c));
+        this.clearSelection();
+        this.bulkActing.set(false);
+      },
+      error: () => this.bulkActing.set(false),
+    });
+  }
+
+  bulkDisapprove() {
+    const ids = [...this.selectedClipIds()];
+    if (!ids.length) return;
+    this.bulkActing.set(true);
+    forkJoin(ids.map(id => this.api.updateClip(id, { status: 'PENDING' }))).subscribe({
+      next: () => {
+        this.clips.update(cs => cs.map(c => ids.includes(c.id) ? { ...c, status: 'PENDING' } : c));
+        this.clearSelection();
+        this.bulkActing.set(false);
+      },
+      error: () => this.bulkActing.set(false),
+    });
+  }
+
+  bulkDelete() {
+    const ids = [...this.selectedClipIds()];
+    if (!ids.length) return;
+    if (!confirm(`Supprimer ${ids.length} clip(s) ?`)) return;
+    this.bulkActing.set(true);
+    forkJoin(ids.map(id => this.api.deleteClip(id))).subscribe({
+      next: () => {
+        this.clips.update(cs => cs.filter(c => !ids.includes(c.id)));
+        this.clearSelection();
+        this.bulkActing.set(false);
+      },
+      error: () => this.bulkActing.set(false),
     });
   }
 
