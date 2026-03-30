@@ -49,18 +49,23 @@ export class YtDlpDownloadService implements IVodDownloadService {
       ];
 
       const ytDlp = spawn(process.env.YT_DLP_PATH || 'yt-dlp', args);
-      
+
       ytDlp.on('error', (err) => {
         reject(new Error(`yt-dlp introuvable ou non exécutable: ${err.message}. Vérifiez l'installation de yt-dlp dans le container.`));
       });
 
+      let stdoutBuf = '';
       ytDlp.stdout.on('data', (data) => {
-        const line = data.toString();
-        if (line.includes('[download]') && onProgress) {
-          const progress = this.parseProgress(line);
-          if (progress) onProgress(progress);
+        stdoutBuf += data.toString();
+        const lines = stdoutBuf.split('\n');
+        stdoutBuf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.trim()) this.logger.log(`yt-dlp: ${line.trim()}`);
+          if (line.includes('[download]') && onProgress) {
+            const progress = this.parseProgress(line);
+            if (progress) onProgress(progress);
+          }
         }
-        this.logger.log(`yt-dlp: ${line.trim()}`);
       });
 
       ytDlp.stderr.on('data', (data) => {
