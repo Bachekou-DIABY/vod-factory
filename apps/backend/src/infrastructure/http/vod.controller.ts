@@ -1,4 +1,4 @@
-import { Controller, Post, Patch, Body, Get, Param, Query, Inject, Logger, Res, NotFoundException, Delete, BadRequestException, UseInterceptors, UploadedFile, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Get, Param, Query, Inject, Logger, Res, NotFoundException, Delete, BadRequestException, UseInterceptors, UploadedFile, InternalServerErrorException, Header } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -186,6 +186,7 @@ export class VodController {
   }
 
   @Get(':id/download-progress')
+  @Header('Cache-Control', 'no-store')
   async downloadProgress(@Param('id') id: string) {
     const active = await this.downloadQueue.getActive();
     const activeJob = active.find(j => j.data.vodId === id);
