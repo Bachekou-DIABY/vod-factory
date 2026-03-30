@@ -681,7 +681,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
   toggleClipSelection(clipId: string) {
     this.selectedClipIds.update(s => {
       const next = new Set(s);
-      next.has(clipId) ? next.delete(clipId) : next.add(clipId);
+      if (next.has(clipId)) { next.delete(clipId); } else { next.add(clipId); }
       return next;
     });
   }

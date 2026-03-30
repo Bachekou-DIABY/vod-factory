@@ -91,7 +91,7 @@ export class VodDownloadProcessor extends WorkerHost {
 
       proc.on('close', (code) => {
         if (code === 0 && fs.existsSync(outputPath)) {
-          try { fs.unlinkSync(inputPath); } catch {}
+          try { fs.unlinkSync(inputPath); } catch (_) { /* ignore */ }
           this.logger.log(`⚡ Faststart appliqué: ${path.basename(outputPath)}`);
           resolve(outputPath);
         } else {
