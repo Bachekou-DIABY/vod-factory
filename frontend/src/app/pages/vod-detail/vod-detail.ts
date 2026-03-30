@@ -540,7 +540,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
             this.api.getClips(id).subscribe((c) => this.clips.set(c));
           }
         });
-      }, 5000);
+      }, 2000);
     }
   }
 
