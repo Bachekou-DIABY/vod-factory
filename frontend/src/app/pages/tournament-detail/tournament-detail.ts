@@ -1,5 +1,5 @@
 import { Component, inject, signal, OnInit, computed } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.service';
 
@@ -200,6 +200,7 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
 export class TournamentDetailPage implements OnInit {
   private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   tournament = signal<Tournament | null>(null);
   vods = signal<Vod[]>([]);
@@ -287,13 +288,9 @@ export class TournamentDetailPage implements OnInit {
       eventStartGGId: this.newVodEventId || undefined,
       streamName: this.newVodStreamName || undefined,
     }).subscribe({
-      next: () => {
-        this.newVodUrl = '';
-        this.newVodEventId = '';
-        this.newVodStreamName = '';
+      next: (vod) => {
         this.addingVod.set(false);
-        this.showAddForm.set(false);
-        this.loadVods(t.id);
+        this.router.navigate(['/vods', vod.id]);
       },
       error: (err) => {
         this.addError.set(err?.error?.message ?? 'Erreur lors de l\'ajout');
@@ -314,14 +311,10 @@ export class TournamentDetailPage implements OnInit {
       eventStartGGId: this.newVodEventId || undefined,
       streamName: this.newVodStreamName || undefined,
     }, (pct) => this.uploadProgress.set(pct)).subscribe({
-      next: () => {
-        this.selectedFile.set(null);
-        this.newVodEventId = '';
-        this.newVodStreamName = '';
-        this.uploadProgress.set(0);
+      next: (vod) => {
         this.addingVod.set(false);
-        this.showAddForm.set(false);
-        this.loadVods(t.id);
+        this.uploadProgress.set(0);
+        this.router.navigate(['/vods', vod.id]);
       },
       error: (err) => {
         this.addError.set(err?.error?.message ?? 'Erreur lors de l\'upload');

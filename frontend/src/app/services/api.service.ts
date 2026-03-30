@@ -101,7 +101,9 @@ export class ApiService {
   }
 
   importTournament(slug: string): Observable<{ data: Tournament }> {
-    return this.http.post<{ data: Tournament }>(`${this.base}/tournaments/import/${slug}`, {});
+    return this.http.post<{ data: Tournament }>(`${this.base}/tournaments/import/${slug}`, {}).pipe(
+      tap(() => this.invalidate('tournaments')),
+    );
   }
 
   getTournaments(): Observable<Tournament[]> {
