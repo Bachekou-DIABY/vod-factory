@@ -73,9 +73,19 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
           <div class="mb-6 bg-gray-900 border border-gray-800 rounded-xl p-4 max-w-xl">
             <div class="flex items-center justify-between mb-2">
               <span class="text-sm text-blue-300">Téléchargement en cours...</span>
-              @if (downloadProgress() !== null) {
-                <span class="text-sm font-mono text-blue-400">{{ downloadProgress() }}%</span>
-              }
+              <div class="flex items-center gap-3">
+                @if (downloadProgress() !== null) {
+                  <span class="text-sm font-mono text-blue-400">{{ downloadProgress() }}%</span>
+                }
+                <button
+                  (click)="retryDownload()"
+                  [disabled]="retryingDownload()"
+                  class="px-2 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs text-gray-300 transition-colors"
+                  title="Relancer si bloqué à 0%"
+                >
+                  {{ retryingDownload() ? '...' : '↺ Relancer' }}
+                </button>
+              </div>
             </div>
             <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
               <div class="h-2 bg-blue-500 rounded-full transition-all duration-500"
@@ -372,6 +382,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
   editNameValue = '';
   downloadProgress = signal<number | null>(null);
   retryingClipId = signal<string | null>(null);
+  retryingDownload = signal(false);
   deletingClipId = signal<string | null>(null);
   fetchingTimestamp = signal(false);
   timestampUrl = '';
@@ -584,6 +595,20 @@ export class VodDetailPage implements OnInit, OnDestroy {
         }, 4000);
       },
       error: () => this.creatingManualClip.set(false),
+    });
+  }
+
+  retryDownload() {
+    const v = this.vod();
+    if (!v) return;
+    this.retryingDownload.set(true);
+    this.api.retryVodDownload(v.id).subscribe({
+      next: () => {
+        this.retryingDownload.set(false);
+        this.downloadProgress.set(0);
+        this.startPollingIfNeeded('DOWNLOADING', v.id);
+      },
+      error: () => this.retryingDownload.set(false),
     });
   }
 

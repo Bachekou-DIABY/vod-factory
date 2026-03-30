@@ -198,6 +198,30 @@ export class VodController {
     return { progress: null, status: 'unknown' };
   }
 
+  @Post(':id/retry-download')
+  async retryDownload(@Param('id') id: string) {
+    const vod = await this.vodRepository.findById(id);
+    if (!vod) throw new NotFoundException(`VOD ${id} non trouvée`);
+
+    // Clean stalled jobs for this vod in the queue
+    const [active, waiting, failed, delayed] = await Promise.all([
+      this.downloadQueue.getActive(),
+      this.downloadQueue.getWaiting(),
+      this.downloadQueue.getFailed(),
+      this.downloadQueue.getDelayed(),
+    ]);
+    const existing = [...active, ...waiting, ...failed, ...delayed].filter(j => j.data.vodId === id);
+    await Promise.all(existing.map(j => j.remove()));
+
+    await this.vodRepository.update(id, { status: 'DOWNLOADING' } as any);
+    await this.downloadQueue.add(VOD_DOWNLOAD_JOB, { vodId: id, sourceUrl: vod.sourceUrl }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 10000 },
+    });
+    this.logger.log(`🔁 Retry download enqueued pour VOD ${id}`);
+    return { message: 'Téléchargement relancé' };
+  }
+
   @Post(':id/remux')
   async remux(@Param('id') id: string) {
     const vod = await this.vodRepository.findById(id);

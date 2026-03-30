@@ -12,7 +12,7 @@ export interface VodDownloadJobData {
   sourceUrl: string;
 }
 
-@Processor(VOD_DOWNLOAD_QUEUE, { concurrency: 2, lockDuration: 3600000 })
+@Processor(VOD_DOWNLOAD_QUEUE, { concurrency: 2, lockDuration: 60000 })
 export class VodDownloadProcessor extends WorkerHost {
   private readonly logger = new Logger(VodDownloadProcessor.name);
 
