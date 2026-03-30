@@ -49,7 +49,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       BACKEND_URL: ${BACKEND_URL:-http://localhost:3000}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4200}
-      YT_DLP_PATH: /usr/local/bin/yt-dlp
+      YT_DLP_PATH: yt-dlp
       PORT: 3000
     volumes:
       - vod_storage:/app/storage
