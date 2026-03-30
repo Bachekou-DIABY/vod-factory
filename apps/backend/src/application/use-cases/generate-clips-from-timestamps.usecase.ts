@@ -56,6 +56,9 @@ export class GenerateClipsFromTimestampsUseCase {
     const eventStartGGId = input.eventStartGGId ?? (vod as any).eventStartGGId;
     if (!eventStartGGId) throw new BadRequestException('eventStartGGId introuvable : associez un event à la VOD ou fournissez-le dans le body.');
 
+    // Fallback to stream name stored on the VOD
+    const resolvedStreamName = streamName ?? (vod as any).streamName;
+
     // Determine recordedAt (Unix seconds)
     let recordedAtUnix: number;
     if (vodRecordedAtUnix !== undefined) {
@@ -71,10 +74,14 @@ export class GenerateClipsFromTimestampsUseCase {
       );
     }
 
-    // Fetch sets from Start.gg
-    const sets = await this.startGGService.getAllSetsByEventId(eventStartGGId, streamName);
+    // Fetch sets from Start.gg — only on-stream sets
+    const allSets = await this.startGGService.getAllSetsByEventId(eventStartGGId, resolvedStreamName);
+    // When no streamName filter, still restrict to sets that were actually on stream
+    const sets = resolvedStreamName
+      ? allSets
+      : allSets.filter((s) => s.stream);
     if (!sets.length) {
-      throw new BadRequestException(`Aucun set trouvé pour l'event ${eventStartGGId}`);
+      throw new BadRequestException(`Aucun set on-stream trouvé pour l'event ${eventStartGGId}`);
     }
 
     this.logger.log(`🎬 Génération clips VOD ${vodId} — ${sets.length} sets, recordedAt: ${new Date(recordedAtUnix * 1000).toISOString()}`);
