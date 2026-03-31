@@ -84,7 +84,11 @@ export class GenerateClipsFromTimestampsUseCase {
       throw new BadRequestException(`Aucun set on-stream trouvé pour l'event ${eventStartGGId}`);
     }
 
-    this.logger.log(`🎬 Génération clips VOD ${vodId} — ${sets.length} sets, recordedAt: ${new Date(recordedAtUnix * 1000).toISOString()}`);
+    // VOD end time — used to discard sets that belong to a different stream/day
+    const vodDurationSeconds = (vod as any).duration ?? 0;
+    const vodEndUnix = vodDurationSeconds > 0 ? recordedAtUnix + vodDurationSeconds : null;
+
+    this.logger.log(`🎬 Génération clips VOD ${vodId} — ${sets.length} sets, recordedAt: ${new Date(recordedAtUnix * 1000).toISOString()}${vodEndUnix ? `, fin: ${new Date(vodEndUnix * 1000).toISOString()}` : ''}`);
 
     let enqueuedSets = 0;
     let skippedSets = 0;
@@ -102,8 +106,21 @@ export class GenerateClipsFromTimestampsUseCase {
       const setStartUnix = Math.floor(new Date(set.startTime).getTime() / 1000);
       const setEndUnix = Math.floor(new Date(set.endTime).getTime() / 1000);
 
+      // Skip sets that start after the VOD ends (belong to another day/stream)
+      if (vodEndUnix && setStartUnix > vodEndUnix) {
+        this.logger.warn(`⚠️ Set ${setOrder} (${set.roundName}) commence après la fin de la VOD — ignoré`);
+        skippedSets++;
+        continue;
+      }
+
       const startSeconds = Math.max(0, setStartUnix - recordedAtUnix - preBufferSeconds);
-      const endSeconds = setEndUnix - recordedAtUnix + postBufferSeconds;
+
+      // For the last set (or any set whose end exceeds the VOD), extend to end of VOD
+      const isLastSet = i === sets.length - 1;
+      const calculatedEnd = setEndUnix - recordedAtUnix + postBufferSeconds;
+      const endSeconds = (isLastSet && vodDurationSeconds > 0)
+        ? vodDurationSeconds
+        : (vodDurationSeconds > 0 ? Math.min(calculatedEnd, vodDurationSeconds) : calculatedEnd);
 
       if (endSeconds <= startSeconds) {
         this.logger.warn(`⚠️ Set ${setOrder}: timestamps invalides (start=${startSeconds}, end=${endSeconds}) — ignoré`);
