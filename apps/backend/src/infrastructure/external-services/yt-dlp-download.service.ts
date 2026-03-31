@@ -54,23 +54,28 @@ export class YtDlpDownloadService implements IVodDownloadService {
         reject(new Error(`yt-dlp introuvable ou non exécutable: ${err.message}. Vérifiez l'installation de yt-dlp dans le container.`));
       });
 
-      let stdoutBuf = '';
-      ytDlp.stdout.on('data', (data) => {
-        stdoutBuf += data.toString();
-        const lines = stdoutBuf.split('\n');
-        stdoutBuf = lines.pop() ?? '';
+      const handleChunk = (buf: string, data: Buffer, src: string): string => {
+        buf += data.toString();
+        // Split on both \n and \r (yt-dlp uses \r for in-place progress, \n with --newline)
+        const lines = buf.split(/[\r\n]/);
+        buf = lines.pop() ?? '';
         for (const line of lines) {
-          if (line.trim()) this.logger.log(`yt-dlp: ${line.trim()}`);
-          if (line.includes('[download]') && onProgress) {
-            const progress = this.parseProgress(line);
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          this.logger.log(`yt-dlp ${src}: ${trimmed}`);
+          if (trimmed.includes('[download]') && onProgress) {
+            const progress = this.parseProgress(trimmed);
             if (progress) onProgress(progress);
           }
         }
-      });
+        return buf;
+      };
 
-      ytDlp.stderr.on('data', (data) => {
-        this.logger.warn(`yt-dlp stderr: ${data.toString().trim()}`);
-      });
+      let stdoutBuf = '';
+      ytDlp.stdout.on('data', (data) => { stdoutBuf = handleChunk(stdoutBuf, data, 'stdout'); });
+
+      let stderrBuf = '';
+      ytDlp.stderr.on('data', (data) => { stderrBuf = handleChunk(stderrBuf, data, 'stderr'); });
 
       ytDlp.on('close', async (code) => {
         if (code !== 0) {
