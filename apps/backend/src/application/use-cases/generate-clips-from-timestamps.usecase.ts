@@ -97,14 +97,16 @@ export class GenerateClipsFromTimestampsUseCase {
       const set = sets[i];
       const setOrder = i + 1;
 
-      if (!set.startTime || !set.endTime) {
+      const isLastSet = i === sets.length - 1;
+
+      // Last set without endTime → use VOD end instead of skipping
+      if (!set.startTime || (!set.endTime && !(isLastSet && vodDurationSeconds > 0))) {
         this.logger.warn(`⚠️ Set ${setOrder} (${set.roundName}) sans timestamps — ignoré`);
         skippedSets++;
         continue;
       }
 
-      const setStartUnix = Math.floor(new Date(set.startTime).getTime() / 1000);
-      const setEndUnix = Math.floor(new Date(set.endTime).getTime() / 1000);
+      const setStartUnix = Math.floor(new Date(set.startTime!).getTime() / 1000);
 
       // Skip sets that start after the VOD ends (belong to another day/stream)
       if (vodEndUnix && setStartUnix > vodEndUnix) {
@@ -115,12 +117,16 @@ export class GenerateClipsFromTimestampsUseCase {
 
       const startSeconds = Math.max(0, setStartUnix - recordedAtUnix - preBufferSeconds);
 
-      // For the last set (or any set whose end exceeds the VOD), extend to end of VOD
-      const isLastSet = i === sets.length - 1;
-      const calculatedEnd = setEndUnix - recordedAtUnix + postBufferSeconds;
-      const endSeconds = (isLastSet && vodDurationSeconds > 0)
-        ? vodDurationSeconds
-        : (vodDurationSeconds > 0 ? Math.min(calculatedEnd, vodDurationSeconds) : calculatedEnd);
+      // If no endTime on last set → extend to end of VOD to capture the full game
+      let endSeconds: number;
+      if (!set.endTime && isLastSet && vodDurationSeconds > 0) {
+        endSeconds = vodDurationSeconds;
+        this.logger.log(`⏭️ Set ${setOrder}: pas d'endTime, clip étendu jusqu'à la fin de la VOD (${vodDurationSeconds}s)`);
+      } else {
+        const setEndUnix = Math.floor(new Date(set.endTime!).getTime() / 1000);
+        const calculatedEnd = setEndUnix - recordedAtUnix + postBufferSeconds;
+        endSeconds = vodDurationSeconds > 0 ? Math.min(calculatedEnd, vodDurationSeconds) : calculatedEnd;
+      }
 
       if (endSeconds <= startSeconds) {
         this.logger.warn(`⚠️ Set ${setOrder}: timestamps invalides (start=${startSeconds}, end=${endSeconds}) — ignoré`);
