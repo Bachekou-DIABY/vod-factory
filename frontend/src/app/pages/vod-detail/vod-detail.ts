@@ -657,6 +657,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
       next: () => {
         this.retryingDownload.set(false);
         this.downloadProgress.set(0);
+        this.vod.set({ ...v, status: 'DOWNLOADING' });
         this.startPollingIfNeeded('DOWNLOADING', v.id);
       },
       error: () => this.retryingDownload.set(false),
