@@ -25,14 +25,14 @@ import { ApiService, Clip } from '../../services/api.service';
             <p class="text-gray-400 mb-4">{{ c.players }} — {{ c.score }}</p>
           }
 
-          <!-- Player -->
+          <!-- Player — full VOD, seeked to set start -->
           <video
             #videoEl
             class="w-full rounded-xl mb-4 bg-black"
             controls
             preload="metadata"
-            [src]="clipUrl(c)"
-            (loadedmetadata)="onMetadata()"
+            [src]="api.getStreamUrl(c.vodId)"
+            (loadedmetadata)="onMetadata(c)"
             (timeupdate)="onTimeUpdate()"
           ></video>
 
@@ -40,14 +40,16 @@ import { ApiService, Clip } from '../../services/api.service';
           <div class="bg-gray-900 rounded-xl p-5 mb-6 border border-gray-800">
             <div class="flex items-start justify-between mb-1">
               <h3 class="text-sm font-semibold text-gray-200">Recouper le clip</h3>
-              <span class="text-xs text-gray-500">
-                {{ formatTime(recutStart) }} — {{ formatTime(recutEnd) }}
-                <span class="text-gray-600 ml-1">({{ formatDuration(recutEnd - recutStart) }})</span>
+              <span class="text-xs text-gray-500 font-mono">
+                {{ toHMS(recutStart) }} — {{ toHMS(recutEnd) }}
+                <span class="text-gray-600 ml-1">({{ toHMS(recutEnd - recutStart) }})</span>
               </span>
             </div>
-            <p class="text-xs text-gray-500 mb-4">Ajuste les poignées pour définir le début et la fin. Clique sur "Recouper" pour générer un nouveau fichier depuis la VOD originale.</p>
+            <p class="text-xs text-gray-500 mb-4">
+              Les poignées sont pré-positionnées sur le début et la fin du set. Ajuste-les puis clique sur "Recouper".
+            </p>
 
-            <!-- Custom dual-handle slider -->
+            <!-- Custom dual-handle slider — full VOD range -->
             <div
               class="relative h-10 flex items-center mb-4 cursor-pointer select-none"
               #sliderTrack
@@ -80,19 +82,19 @@ import { ApiService, Clip } from '../../services/api.service';
               ></div>
             </div>
 
-            <!-- Precise inputs + preview buttons -->
+            <!-- hh:mm:ss inputs + preview buttons -->
             <div class="flex gap-4 items-center flex-wrap">
               <div class="flex items-center gap-2">
                 <label class="text-xs text-gray-500 w-12 shrink-0">Début</label>
-                <input type="number" step="1" [value]="recutStart" (change)="onStartInput($event)"
-                  class="w-24 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-purple-500 outline-none font-mono" />
-                <span class="text-xs text-gray-600">s</span>
+                <input type="text" [value]="toHMS(recutStart)" (change)="onStartInput($event)"
+                  class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-purple-500 outline-none font-mono"
+                  placeholder="hh:mm:ss" />
               </div>
               <div class="flex items-center gap-2">
                 <label class="text-xs text-gray-500 w-12 shrink-0">Fin</label>
-                <input type="number" step="1" [value]="recutEnd" (change)="onEndInput($event)"
-                  class="w-24 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-purple-500 outline-none font-mono" />
-                <span class="text-xs text-gray-600">s</span>
+                <input type="text" [value]="toHMS(recutEnd)" (change)="onEndInput($event)"
+                  class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-purple-500 outline-none font-mono"
+                  placeholder="hh:mm:ss" />
               </div>
               <button (click)="seekVideo(recutStart)"
                 class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
@@ -176,7 +178,7 @@ import { ApiService, Clip } from '../../services/api.service';
             </div>
           </div>
 
-          <!-- Actions with explanations -->
+          <!-- Actions -->
           <div class="flex gap-3 flex-wrap items-start justify-between">
             <div class="flex flex-col gap-1">
               <button (click)="recut()" [disabled]="recutting()"
@@ -255,14 +257,13 @@ export class ClipReviewPage implements OnInit {
   uploadingThumb = signal(false);
   thumbMsg = signal('');
 
-  // Clip-file-relative positions (0 = start of clip file)
+  // VOD-absolute positions (seconds)
   recutStart = 0;
   recutEnd = 0;
 
   videoDuration = signal(0);
   currentTime = signal(0);
 
-  // Active drag handle: 'start' | 'end' | null
   private dragging: 'start' | 'end' | null = null;
 
   startPct() {
@@ -288,6 +289,25 @@ export class ClipReviewPage implements OnInit {
     return `calc(8px + ${((100 - pct) / 100).toFixed(4)} * (100% - 16px))`;
   }
 
+  /** Convert seconds to hh:mm:ss */
+  toHMS(seconds: number): string {
+    const s = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  /** Parse hh:mm:ss or mm:ss or raw seconds → seconds */
+  fromHMS(value: string): number {
+    const trimmed = value.trim();
+    const parts = trimmed.split(':').map(Number);
+    if (parts.some(isNaN)) return NaN;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return parts[0];
+  }
+
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id')!;
     this.api.getClip(id).subscribe({
@@ -299,22 +319,26 @@ export class ClipReviewPage implements OnInit {
         this.editPlayers = c.players ?? '';
         this.editScore = c.score ?? '';
         this.editPrivacy = c.privacyStatus ?? 'unlisted';
-        this.recutStart = 0;
-        this.recutEnd = 0; // will be set in onMetadata
+        // Pre-position at set boundaries; onMetadata will also seek video there
+        this.recutStart = c.startSeconds;
+        this.recutEnd = c.endSeconds;
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
     });
   }
 
-  onMetadata() {
+  onMetadata(c: Clip) {
     const video = this.videoEl?.nativeElement;
     if (!video) return;
     const dur = video.duration;
     if (isFinite(dur)) {
       this.videoDuration.set(dur);
-      this.recutEnd = dur;
+      // If positions weren't set yet (edge case), fallback to full range
+      if (this.recutEnd === 0) this.recutEnd = dur;
     }
+    // Seek to set start so user sees the right moment immediately
+    video.currentTime = this.recutStart;
   }
 
   onTimeUpdate() {
@@ -324,7 +348,7 @@ export class ClipReviewPage implements OnInit {
 
   onTrackPointerDown(e: PointerEvent, track: HTMLElement) {
     const rect = track.getBoundingClientRect();
-    const usableWidth = rect.width - 16; // account for 8px padding on each side
+    const usableWidth = rect.width - 16;
     const x = e.clientX - rect.left - 8;
     const pct = Math.max(0, Math.min(1, x / usableWidth));
     const val = pct * this.videoDuration();
@@ -340,7 +364,7 @@ export class ClipReviewPage implements OnInit {
   }
 
   private onPointerMove = (e: PointerEvent) => {
-    const track = (e.currentTarget as HTMLElement);
+    const track = e.currentTarget as HTMLElement;
     const rect = track.getBoundingClientRect();
     const usableWidth = rect.width - 16;
     const x = e.clientX - rect.left - 8;
@@ -349,7 +373,7 @@ export class ClipReviewPage implements OnInit {
   };
 
   private onPointerUp = (e: PointerEvent) => {
-    const track = (e.currentTarget as HTMLElement);
+    const track = e.currentTarget as HTMLElement;
     track.removeEventListener('pointermove', this.onPointerMove);
     track.removeEventListener('pointerup', this.onPointerUp);
     this.dragging = null;
@@ -368,7 +392,7 @@ export class ClipReviewPage implements OnInit {
   }
 
   onStartInput(event: Event) {
-    const val = parseFloat((event.target as HTMLInputElement).value);
+    const val = this.fromHMS((event.target as HTMLInputElement).value);
     if (!isNaN(val)) {
       this.recutStart = Math.max(0, Math.min(val, this.recutEnd - 1));
       this.seekVideo(this.recutStart);
@@ -376,7 +400,7 @@ export class ClipReviewPage implements OnInit {
   }
 
   onEndInput(event: Event) {
-    const val = parseFloat((event.target as HTMLInputElement).value);
+    const val = this.fromHMS((event.target as HTMLInputElement).value);
     if (!isNaN(val)) {
       this.recutEnd = Math.max(this.recutStart + 1, Math.min(val, this.videoDuration()));
       this.seekVideo(this.recutEnd);
@@ -398,18 +422,37 @@ export class ClipReviewPage implements OnInit {
     if (t > this.recutStart) this.recutEnd = Math.min(t, this.videoDuration());
   }
 
-  clipUrl(clip: Clip): string {
-    return this.api.getClipStreamUrl(clip.id);
+  recut() {
+    const c = this.clip();
+    if (!c) return;
+    // recutStart/recutEnd are already VOD-absolute
+    this.recutting.set(true);
+    this.api.recutClip(c.id, this.recutStart, this.recutEnd).subscribe({
+      next: (updated) => {
+        this.clip.set(updated);
+        this.recutting.set(false);
+        this.successMsg.set('Recut terminé ✓');
+        setTimeout(() => this.successMsg.set(null), 3000);
+        setTimeout(() => {
+          const video = this.videoEl?.nativeElement;
+          if (video) video.load();
+          this.recutStart = updated.startSeconds;
+          this.recutEnd = updated.endSeconds;
+          this.videoDuration.set(0);
+        }, 500);
+      },
+      error: () => this.recutting.set(false),
+    });
   }
 
-  formatTime(seconds: number): string {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return m + ':' + s.toString().padStart(2, '0');
-  }
-
-  formatDuration(seconds: number): string {
-    return Math.round(seconds) + 's';
+  deleteClip() {
+    if (!confirm('Supprimer ce clip définitivement ?')) return;
+    const c = this.clip();
+    if (!c) return;
+    this.api.deleteClip(c.id).subscribe({
+      next: () => this.router.navigate(['/vods', c.vodId]),
+      error: (err) => alert(err?.error?.message ?? 'Erreur lors de la suppression'),
+    });
   }
 
   save() {
@@ -430,7 +473,7 @@ export class ClipReviewPage implements OnInit {
   approve() {
     this.saving.set(true);
     this.api.updateClip(this.clip()!.id, { status: 'APPROVED' }).subscribe({
-      next: (c) => { this.clip.set(c); this.saving.set(false); this.successMsg.set('Approuve ✓'); setTimeout(() => this.successMsg.set(null), 2000); },
+      next: (c) => { this.clip.set(c); this.saving.set(false); this.successMsg.set('Approuvé ✓'); setTimeout(() => this.successMsg.set(null), 2000); },
       error: () => this.saving.set(false),
     });
   }
@@ -440,42 +483,6 @@ export class ClipReviewPage implements OnInit {
     this.api.updateClip(this.clip()!.id, { status: 'PENDING' }).subscribe({
       next: (c) => { this.clip.set(c); this.saving.set(false); this.successMsg.set('Désapprouvé'); setTimeout(() => this.successMsg.set(null), 2000); },
       error: () => this.saving.set(false),
-    });
-  }
-
-  recut() {
-    const c = this.clip();
-    if (!c) return;
-    // Convert clip-file-relative offsets → VOD-absolute timestamps
-    const vodStart = c.startSeconds + this.recutStart;
-    const vodEnd = c.startSeconds + this.recutEnd;
-    this.recutting.set(true);
-    this.api.recutClip(c.id, vodStart, vodEnd).subscribe({
-      next: (updated) => {
-        this.clip.set(updated);
-        this.recutting.set(false);
-        this.successMsg.set('Recut termine ✓');
-        setTimeout(() => this.successMsg.set(null), 3000);
-        setTimeout(() => {
-          const video = this.videoEl?.nativeElement;
-          if (video) video.load();
-          // Reset offsets for new clip
-          this.recutStart = 0;
-          this.recutEnd = 0;
-          this.videoDuration.set(0);
-        }, 500);
-      },
-      error: () => this.recutting.set(false),
-    });
-  }
-
-  deleteClip() {
-    if (!confirm('Supprimer ce clip définitivement ?')) return;
-    const c = this.clip();
-    if (!c) return;
-    this.api.deleteClip(c.id).subscribe({
-      next: () => this.router.navigate(['/vods', c.vodId]),
-      error: (err) => alert(err?.error?.message ?? 'Erreur lors de la suppression'),
     });
   }
 
