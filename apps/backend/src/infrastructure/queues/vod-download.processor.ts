@@ -55,20 +55,10 @@ export class VodDownloadProcessor extends WorkerHost {
 
       const probe = await this.ffprobe.probe(result.filePath);
 
-      // Remux faststart uniquement si nécessaire (moov atom pas encore en tête)
-      let remuxedPath = result.filePath;
-      if (!this.isFaststart(result.filePath)) {
-        this.logger.log(`🔄 Faststart manquant, remux en cours...`);
-        await this.vodRepository.updateStatus(vodId, VodStatus.PROCESSING);
-        remuxedPath = await this.remuxFaststart(result.filePath);
-      } else {
-        this.logger.log(`✅ Faststart déjà appliqué par yt-dlp, remux ignoré`);
-      }
-
       await this.vodRepository.update(vodId, {
-        filePath: remuxedPath,
+        filePath: result.filePath,
         status: VodStatus.DOWNLOADED,
-        fileSize: fs.existsSync(remuxedPath) ? fs.statSync(remuxedPath).size : result.fileSize,
+        fileSize: result.fileSize,
         duration: probe.duration || result.duration,
         resolution: probe.resolution,
         fps: probe.fps,
