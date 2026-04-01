@@ -23,6 +23,11 @@ interface StartGGSetNode {
     streamName: string;
     streamId: string;
   };
+  phaseGroup?: {
+    phase?: {
+      name?: string;
+    };
+  };
   slots: {
     entrant: {
       id: number | string;
@@ -186,6 +191,9 @@ export class StartGGService implements IStartGGService {
               totalGames
               startedAt
               completedAt
+              phaseGroup {
+                phase { name }
+              }
               stream {
                 streamName
                 streamId
@@ -219,6 +227,7 @@ export class StartGGService implements IStartGGService {
       return filtered.map((s) => ({
         id: s.id.toString(),
         roundName: s.fullRoundText,
+        phaseName: s.phaseGroup?.phase?.name,
         totalGames: s.totalGames,
         streamName: s.stream?.streamName,
         winnerId: s.winnerId?.toString() ?? '',
@@ -241,7 +250,7 @@ export class StartGGService implements IStartGGService {
     let totalPages = 1;
 
     do {
-      const query = `query { event(id: ${eventStartGGId}) { sets(page: ${page}, perPage: 50) { pageInfo { totalPages } nodes { id fullRoundText winnerId displayScore totalGames startedAt completedAt stream { streamName streamId } slots { entrant { id name } } } } } }`;
+      const query = `query { event(id: ${eventStartGGId}) { sets(page: ${page}, perPage: 50) { pageInfo { totalPages } nodes { id fullRoundText winnerId displayScore totalGames startedAt completedAt phaseGroup { phase { name } } stream { streamName streamId } slots { entrant { id name } } } } } }`;
       try {
         const response = await axios.post(
           this.apiUrl,
@@ -271,6 +280,7 @@ export class StartGGService implements IStartGGService {
     return valid.map((s) => ({
       id: s.id.toString(),
       roundName: s.fullRoundText,
+      phaseName: s.phaseGroup?.phase?.name,
       totalGames: s.totalGames,
       streamName: s.stream?.streamName,
       winnerId: s.winnerId?.toString() ?? '',

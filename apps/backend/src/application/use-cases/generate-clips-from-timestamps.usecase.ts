@@ -147,8 +147,8 @@ export class GenerateClipsFromTimestampsUseCase {
         startSeconds,
         endSeconds,
         totalSets: sets.length - skippedSets,
-        title: `${set.roundName} — ${players}`,
-        roundName: set.roundName,
+        title: `${set.phaseName ? `${set.phaseName} - ` : ''}${set.roundName} — ${players}`,
+        roundName: set.phaseName ? `${set.phaseName} - ${set.roundName}` : set.roundName,
         players,
         score: set.score,
       };

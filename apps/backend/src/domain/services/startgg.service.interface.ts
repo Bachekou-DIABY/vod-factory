@@ -3,6 +3,7 @@ import { Tournament } from '../entities/tournament.entity';
 export interface StartGGSetResponse {
   id: string;
   roundName: string;
+  phaseName?: string;
   totalGames?: number;
   streamName?: string;
   winnerId: string;
