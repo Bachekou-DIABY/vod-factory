@@ -265,7 +265,9 @@ export class VodController {
     const proc = spawn('ffmpeg', [
       '-i', inputPath,
       '-c', 'copy',
-      '-bsf:a', 'aac_adtstoasc',
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-b:a', '192k',
       '-movflags', '+faststart',
       '-y',
       outputPath,
