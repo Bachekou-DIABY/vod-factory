@@ -121,7 +121,7 @@ export class VodDownloadProcessor extends WorkerHost {
       const proc = spawn('ffmpeg', [
         '-i', inputPath,
         '-c', 'copy',
-        '-movflags', '+faststart',
+        '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
         '-y',
         outputPath,
       ]);

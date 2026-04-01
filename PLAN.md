@@ -115,3 +115,22 @@
 **23-24/03/2026** : Angular frontend complet, clip-review UI, streaming vidéo, YouTube OAuth upload, remux faststart, thumbnail custom, fix recut Windows
 
 **24/03/2026** : Backlog terminé — ffprobe (durée/résolution réelles), BullMQ download queue, suppression fichier source VOD, import VOD local depuis UI
+
+J'ai reussi a deployer le https et j'ai du modifier cette ligne dans le prisma.schema pcq c une archi arm jsp quoi
+"  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]"
+Il faudrait qu'on puisse supprimer les clips depuis l'interface de gestion des clips dans une vod ( par ex la j'ai 3 sets auto générés qui font 5 sec donc ils sont inexploitables mais je dois aller sur chaque sets un par un pr les delete)
+
+Il faudrait que l'utilisateur n'ait pas a rentrer la commande pr le timestamp unix a la main
+Quitte a lui demander l'url de la vod -> executer la requete depuis un bouton -> envoyer la data au back
+
+Il faudrait etre plus explicite " page tournoi " = a quoi elle sert ? -> récuperer les informations ( sets / evenements / etc ) du tournoi dont on souhaite découper les vods
+"page import vod" -> Dans l'onglet d'Import des vods, il faut expliquer pourquoi importer les vods et que dans le cas ou l'import se fait depuis les fichiers locaux, il faudra synchroniser l'heure ou le stream s'est deroulé avec les timings du tournoi 
+Expliquer aussi que renseigner le nom de la vod et l'event permet de regrouper les vods en fonction de ces criteres 
+eventuellement pouvoir supprimer les vods directement depuis cet ecran aussi  
+
+J'ai des bad geteway par ci par la ( quand j'importe une vod que ce soit depuis l'url ou les fichiers locaux )
+Le bug du slider est a fix aussi sur l'interface de gestion des clips la ou y'a la vod entiere
+
+![alt text](image.png) y'a marqué tournoi ajouté mais j'dois refresh pour pouvoir cliquer sur le tournoi
+
+![alt text](image-1.png) j'ai importé une vod par l'url mais j'dois refresh pr voir la vod et surtout je sais meme pas si elle se dl vraiment pcq y'a une 502 
