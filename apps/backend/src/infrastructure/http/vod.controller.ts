@@ -262,6 +262,11 @@ export class VodController {
         this.logger.error(`❌ Remux échoué pour VOD ${vodId} (code ${code})`);
       }
     });
+
+    proc.on('error', async () => {
+      await this.vodRepository.update(vodId, { status: 'DOWNLOADED' } as any);
+      this.logger.error(`❌ ffmpeg introuvable pour remux VOD ${vodId}`);
+    });
   }
 
   @Get(':id/fetch-timestamp')
