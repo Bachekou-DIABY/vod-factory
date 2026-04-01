@@ -55,11 +55,20 @@ export class VodDownloadProcessor extends WorkerHost {
 
       const probe = await this.ffprobe.probe(result.filePath);
 
-      // yt-dlp applique déjà +faststart via --postprocessor-args, pas besoin de remux
+      // Remux faststart uniquement si nécessaire (moov atom pas encore en tête)
+      let remuxedPath = result.filePath;
+      if (!this.isFaststart(result.filePath)) {
+        this.logger.log(`🔄 Faststart manquant, remux en cours...`);
+        await this.vodRepository.updateStatus(vodId, VodStatus.PROCESSING);
+        remuxedPath = await this.remuxFaststart(result.filePath);
+      } else {
+        this.logger.log(`✅ Faststart déjà appliqué par yt-dlp, remux ignoré`);
+      }
+
       await this.vodRepository.update(vodId, {
-        filePath: result.filePath,
+        filePath: remuxedPath,
         status: VodStatus.DOWNLOADED,
-        fileSize: result.fileSize,
+        fileSize: fs.existsSync(remuxedPath) ? fs.statSync(remuxedPath).size : result.fileSize,
         duration: probe.duration || result.duration,
         resolution: probe.resolution,
         fps: probe.fps,
@@ -67,12 +76,38 @@ export class VodDownloadProcessor extends WorkerHost {
       });
 
       this.downloadProgress.clear(vodId);
-      this.logger.log(`✅ [Job ${job.id}] VOD ${vodId} prête: ${result.filePath}`);
+      this.logger.log(`✅ [Job ${job.id}] VOD ${vodId} prête: ${remuxedPath}`);
     } catch (err) {
       this.downloadProgress.clear(vodId);
       this.logger.error(`❌ [Job ${job.id}] Erreur download VOD ${vodId}: ${err.message}`);
       await this.vodRepository.updateStatus(vodId, VodStatus.FAILED);
       throw err;
+    }
+  }
+
+  private isFaststart(filePath: string): boolean {
+    // Dans un MP4, faststart = moov avant mdat.
+    // Le premier box est toujours ftyp, donc on lit les 2 premiers boxes
+    // pour vérifier si le second est moov (faststart) ou mdat/autre (pas faststart).
+    try {
+      const fd = fs.openSync(filePath, 'r');
+      const header = Buffer.alloc(8);
+      let offset = 0;
+
+      for (let i = 0; i < 5; i++) {
+        fs.readSync(fd, header, 0, 8, offset);
+        const size = header.readUInt32BE(0);
+        const type = header.slice(4, 8).toString('ascii');
+        if (type === 'moov') { fs.closeSync(fd); return true; }
+        if (type === 'mdat') { fs.closeSync(fd); return false; }
+        if (size < 8) break;
+        offset += size;
+      }
+
+      fs.closeSync(fd);
+      return false;
+    } catch {
+      return false;
     }
   }
 

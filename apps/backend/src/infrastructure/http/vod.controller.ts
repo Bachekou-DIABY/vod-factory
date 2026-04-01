@@ -1,9 +1,9 @@
-import { Controller, Post, Patch, Body, Get, Param, Query, Inject, Logger, Res, NotFoundException, Delete, BadRequestException, UseInterceptors, UploadedFile, InternalServerErrorException, Header } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Get, Param, Query, Inject, Logger, Res, Req, NotFoundException, Delete, BadRequestException, UseInterceptors, UploadedFile, InternalServerErrorException, Header } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
@@ -144,6 +144,7 @@ export class VodController {
   @Get(':id/stream')
   async stream(
     @Param('id') id: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const vod = await this.vodRepository.findById(id);
@@ -153,11 +154,31 @@ export class VodController {
     }
 
     const filePath = path.resolve(vod.filePath);
-    res.sendFile(filePath, (err) => {
-      if (err && err.message !== 'Request aborted') {
-        this.logger.error(`Erreur streaming VOD ${id}: ${err.message}`);
-      }
-    });
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(startStr, 10);
+      const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
+      const chunkSize = end - start + 1;
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': 'video/mp4',
+      });
+      fs.createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': 'video/mp4',
+        'Accept-Ranges': 'bytes',
+      });
+      fs.createReadStream(filePath).pipe(res);
+    }
   }
 
   @Delete(':id/file')
