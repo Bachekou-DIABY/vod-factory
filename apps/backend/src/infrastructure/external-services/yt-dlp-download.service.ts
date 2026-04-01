@@ -166,7 +166,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
 
   private parseProgress(line: string): DownloadProgress | null {
     // Parse: [download]  12.3% of ~1.2GiB at 5.2MiB/s ETA 02:15
-    const match = line.match(/\[download\]\s+(\d+\.?\d*)%\s+of\s+([^\s]+)\s+at\s+([^\s]+)\s+ETA\s+(.+)/);
+    const match = line.match(/\[download\]\s+(\d+\.?\d*)%\s+of\s+~?\s*([^\s]+)\s+at\s+([^\s]+)\s+ETA\s+([\d:]+)/);
     if (match) {
       return {
         percent: parseFloat(match[1]),
