@@ -9,6 +9,7 @@ import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/
 import { IVodDownloadService, VOD_DOWNLOAD_SERVICE_TOKEN } from '../../domain/interfaces/vod-download-service.interface';
 import { VodStatus } from '../../domain/entities/vod.entity';
 import { FfprobeService } from '../external-services/ffprobe.service';
+import { DownloadProgressService } from './download-progress.service';
 
 export interface VodDownloadJobData {
   vodId: string;
@@ -25,6 +26,7 @@ export class VodDownloadProcessor extends WorkerHost {
     @Inject(VOD_DOWNLOAD_SERVICE_TOKEN)
     private readonly downloadService: IVodDownloadService,
     private readonly ffprobe: FfprobeService,
+    private readonly downloadProgress: DownloadProgressService,
   ) {
     super();
   }
@@ -44,7 +46,7 @@ export class VodDownloadProcessor extends WorkerHost {
         sourceUrl,
         undefined,
         (progress) => {
-          job.updateProgress(progress.percent).catch(() => undefined);
+          this.downloadProgress.set(vodId, progress.percent);
           if (Math.round(progress.percent) % 5 === 0) {
             this.logger.log(`📥 VOD ${vodId}: ${progress.percent.toFixed(0)}% (${progress.speed})`);
           }
@@ -66,8 +68,10 @@ export class VodDownloadProcessor extends WorkerHost {
         recordedAt: result.recordedAt,
       });
 
+      this.downloadProgress.clear(vodId);
       this.logger.log(`✅ [Job ${job.id}] VOD ${vodId} prête: ${remuxedPath}`);
     } catch (err) {
+      this.downloadProgress.clear(vodId);
       this.logger.error(`❌ [Job ${job.id}] Erreur download VOD ${vodId}: ${err.message}`);
       await this.vodRepository.updateStatus(vodId, VodStatus.FAILED);
       throw err;

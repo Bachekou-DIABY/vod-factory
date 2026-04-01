@@ -40,6 +40,7 @@ import { YouTubeService } from '../infrastructure/external-services/youtube.serv
 import { ClipSetProcessor } from '../infrastructure/queues/clip-set.processor';
 import { AnalyzeChunkProcessor } from '../infrastructure/queues/analyze-chunk.processor';
 import { VodDownloadProcessor } from '../infrastructure/queues/vod-download.processor';
+import { DownloadProgressService } from '../infrastructure/queues/download-progress.service';
 import { FfprobeService } from '../infrastructure/external-services/ffprobe.service';
 import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE, VOD_DOWNLOAD_QUEUE } from '../infrastructure/queues/queue.constants';
 export { VOD_PROCESSING_QUEUE };
@@ -115,6 +116,7 @@ export { VOD_PROCESSING_QUEUE };
     ClipSetProcessor,
     AnalyzeChunkProcessor,
     VodDownloadProcessor,
+    DownloadProgressService,
     FfprobeService,
     YouTubeService,
   ],

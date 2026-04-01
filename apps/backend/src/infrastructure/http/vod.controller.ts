@@ -15,6 +15,7 @@ import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/
 import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositories/clip.repository.interface';
 import { TournamentRepository } from '../persistence/tournament.repository';
 import { CLIP_SET_QUEUE, CLIP_SET_JOB, VOD_DOWNLOAD_QUEUE, VOD_DOWNLOAD_JOB } from '../queues/queue.constants';
+import { DownloadProgressService } from '../queues/download-progress.service';
 
 class CreateVodDto implements AddVodToTournamentInput {
   setId?: string;
@@ -45,6 +46,7 @@ export class VodController {
     private readonly clipQueue: Queue,
     @InjectQueue(VOD_DOWNLOAD_QUEUE)
     private readonly downloadQueue: Queue,
+    private readonly downloadProgress: DownloadProgressService,
   ) {}
 
   @Post('upload')
@@ -187,13 +189,9 @@ export class VodController {
 
   @Get(':id/download-progress')
   @Header('Cache-Control', 'no-store')
-  async downloadProgress(@Param('id') id: string) {
-    const active = await this.downloadQueue.getActive();
-    const activeJob = active.find(j => j.data.vodId === id);
-    if (activeJob) {
-      const progress = await activeJob.progress;
-      return { progress: typeof progress === 'number' ? progress : 0, status: 'active' };
-    }
+  async getDownloadProgress(@Param('id') id: string) {
+    const progress = this.downloadProgress.get(id);
+    if (progress !== null) return { progress, status: 'active' };
     const waiting = await this.downloadQueue.getWaiting();
     if (waiting.find(j => j.data.vodId === id)) return { progress: 0, status: 'waiting' };
     return { progress: null, status: 'unknown' };
