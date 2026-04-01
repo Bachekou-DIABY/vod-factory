@@ -66,7 +66,7 @@ export class VodDownloadProcessor extends WorkerHost {
       });
 
       this.downloadProgress.clear(vodId);
-      this.logger.log(`✅ [Job ${job.id}] VOD ${vodId} prête: ${remuxedPath}`);
+      this.logger.log(`✅ [Job ${job.id}] VOD ${vodId} prête: ${result.filePath}`);
     } catch (err) {
       this.downloadProgress.clear(vodId);
       this.logger.error(`❌ [Job ${job.id}] Erreur download VOD ${vodId}: ${err.message}`);
