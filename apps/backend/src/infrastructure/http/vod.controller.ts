@@ -270,6 +270,10 @@ export class VodController {
       outputPath,
     ]);
 
+    proc.stderr.on('data', (data) => {
+      this.logger.debug(`ffmpeg remux: ${data.toString().trim()}`);
+    });
+
     proc.on('close', async (code) => {
       if (code === 0) {
         // Replace old file with remuxed version
