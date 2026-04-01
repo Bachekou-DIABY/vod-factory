@@ -45,7 +45,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
         '--no-call-home',
         '--ffmpeg-location', 'ffmpeg',
         '--merge-output-format', 'mp4',
-        '--postprocessor-args', 'ffmpeg:-c:v copy -c:a aac -b:a 192k -movflags +faststart',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
       ];
 
       const ytDlp = spawn(process.env.YT_DLP_PATH || 'yt-dlp', args);
