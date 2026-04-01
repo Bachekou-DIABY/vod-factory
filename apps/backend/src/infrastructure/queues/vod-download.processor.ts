@@ -122,7 +122,7 @@ export class VodDownloadProcessor extends WorkerHost {
         '-i', inputPath,
         '-c', 'copy',
         '-bsf:a', 'aac_adtstoasc',
-      '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+      '-movflags', '+faststart',
         '-y',
         outputPath,
       ]);
