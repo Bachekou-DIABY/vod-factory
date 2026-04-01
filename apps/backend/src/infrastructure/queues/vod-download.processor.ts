@@ -55,13 +55,11 @@ export class VodDownloadProcessor extends WorkerHost {
 
       const probe = await this.ffprobe.probe(result.filePath);
 
-      // Auto-remux pour garantir faststart (lisible directement dans le navigateur)
-      const remuxedPath = await this.remuxFaststart(result.filePath);
-
+      // yt-dlp applique déjà +faststart via --postprocessor-args, pas besoin de remux
       await this.vodRepository.update(vodId, {
-        filePath: remuxedPath,
+        filePath: result.filePath,
         status: VodStatus.DOWNLOADED,
-        fileSize: fs.existsSync(remuxedPath) ? fs.statSync(remuxedPath).size : result.fileSize,
+        fileSize: result.fileSize,
         duration: probe.duration || result.duration,
         resolution: probe.resolution,
         fps: probe.fps,
@@ -69,7 +67,7 @@ export class VodDownloadProcessor extends WorkerHost {
       });
 
       this.downloadProgress.clear(vodId);
-      this.logger.log(`✅ [Job ${job.id}] VOD ${vodId} prête: ${remuxedPath}`);
+      this.logger.log(`✅ [Job ${job.id}] VOD ${vodId} prête: ${result.filePath}`);
     } catch (err) {
       this.downloadProgress.clear(vodId);
       this.logger.error(`❌ [Job ${job.id}] Erreur download VOD ${vodId}: ${err.message}`);
