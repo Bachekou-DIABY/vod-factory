@@ -14,6 +14,7 @@ export class TournamentMapper {
       startAt: prismaTournament.startAt,
       endAt: prismaTournament.endAt,
       startGGId: prismaTournament.startGGId,
+      youtubePlaylistId: prismaTournament.youtubePlaylistId ?? undefined,
       createdAt: prismaTournament.createdAt,
       updatedAt: prismaTournament.updatedAt,
     };
