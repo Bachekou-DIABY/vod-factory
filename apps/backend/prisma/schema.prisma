@@ -12,6 +12,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model YoutubeAccount {
+  id           String   @id @default(cuid())
+  channelId    String   @unique
+  channelName  String
+  tokens       Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tournaments  Tournament[]
+
+  @@map("youtube_accounts")
+}
+
 model Tournament {
   id          String   @id @default(cuid())
   name        String
@@ -20,11 +33,13 @@ model Tournament {
   endAt       DateTime
   startGGId          String?  @unique
   youtubePlaylistId  String?
+  youtubeAccountId   String?
   createdAt          DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  sets        Set[]
+  sets             Set[]
+  youtubeAccount   YoutubeAccount? @relation(fields: [youtubeAccountId], references: [id], onDelete: SetNull)
 
   @@map("tournaments")
 }

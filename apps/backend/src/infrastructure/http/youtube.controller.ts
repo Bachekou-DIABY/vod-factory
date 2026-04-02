@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
+  Patch,
   Param,
   Query,
   Inject,
@@ -30,30 +32,23 @@ export class YouTubeController {
     private readonly tournamentRepository: ITournamentRepository,
   ) {}
 
+  // ── Auth ──────────────────────────────────────────────────────────────
+
   @Get('youtube/auth-url')
   getAuthUrl() {
     try {
       const url = this.youtubeService.getAuthUrl();
-      return { url, authenticated: this.youtubeService.isAuthenticated() };
+      return { url };
     } catch (err) {
       throw new BadRequestException((err as Error).message);
     }
   }
 
-  @Get('youtube/status')
-  getStatus() {
-    return { authenticated: this.youtubeService.isAuthenticated() };
-  }
-
   @Get('youtube/callback')
   async callback(@Query('code') code: string, @Res() res: Response) {
-    if (!code) {
-      res.status(400).send('Code manquant');
-      return;
-    }
+    if (!code) { res.status(400).send('Code manquant'); return; }
     try {
       await this.youtubeService.handleCallback(code);
-      // Redirect to frontend approved page
       const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:4200';
       res.redirect(`${frontendUrl}/youtube-connected`);
     } catch (err) {
@@ -62,41 +57,72 @@ export class YouTubeController {
     }
   }
 
+  // ── Account management ───────────────────────────────────────────────
+
+  @Get('youtube/accounts')
+  async listAccounts() {
+    return this.youtubeService.listAccounts();
+  }
+
+  @Delete('youtube/accounts/:id')
+  async disconnectAccount(@Param('id') id: string) {
+    await this.youtubeService.disconnectAccount(id);
+    return { message: 'Compte déconnecté' };
+  }
+
+  // ── Tournament ↔ account association ────────────────────────────────
+
+  @Patch('tournaments/:id/youtube-account')
+  async setTournamentAccount(
+    @Param('id') id: string,
+    @Query('accountId') accountId: string,
+  ) {
+    const tournament = await this.tournamentRepository.findById(id);
+    if (!tournament) throw new NotFoundException(`Tournoi ${id} non trouvé`);
+    await this.tournamentRepository.update(id, { youtubeAccountId: accountId || null } as any);
+    return { message: 'Compte YouTube associé au tournoi' };
+  }
+
+  // ── Upload ───────────────────────────────────────────────────────────
+
   @Post('clips/:id/upload-youtube')
   async uploadClip(@Param('id') id: string) {
-    if (!this.youtubeService.isAuthenticated()) {
-      throw new BadRequestException('Non authentifié YouTube — appelle GET /api/youtube/auth-url d\'abord');
-    }
-
     const clip = await this.clipRepository.findById(id);
     if (!clip) throw new NotFoundException(`Clip ${id} non trouvé`);
     if (!clip.filePath) throw new BadRequestException('Clip sans fichier');
+    if (clip.status === 'UPLOADING') throw new BadRequestException('Upload déjà en cours');
+    if (clip.status === 'UPLOADED') return { youtubeVideoId: clip.youtubeVideoId, alreadyUploaded: true };
 
-    if (clip.status === 'UPLOADING') {
-      throw new BadRequestException('Upload déjà en cours');
-    }
-    if (clip.status === 'UPLOADED') {
-      return { youtubeVideoId: clip.youtubeVideoId, alreadyUploaded: true };
+    // Find YouTube account via VOD → tournament
+    const vod = await this.vodRepository.findById(clip.vodId);
+    if (!vod?.tournamentId) throw new BadRequestException('VOD non associée à un tournoi');
+    const tournament = await this.tournamentRepository.findById(vod.tournamentId);
+    if (!tournament) throw new NotFoundException('Tournoi introuvable');
+
+    const youtubeAccountId = (tournament as any).youtubeAccountId;
+    if (!youtubeAccountId) {
+      throw new BadRequestException(
+        'Aucune chaîne YouTube associée à ce tournoi. Connecte un compte dans les paramètres du tournoi.',
+      );
     }
 
-    // Mark as uploading
     await this.clipRepository.update(id, { status: 'UPLOADING' });
-
-    // Run upload in background
-    this.runUpload(id, clip).catch((err) => { this.logger.error(`Upload background error: ${err}`); });
+    this.runUpload(id, clip, youtubeAccountId, tournament).catch((err) => {
+      this.logger.error(`Upload background error: ${err}`);
+    });
 
     return { message: 'Upload en cours...' };
   }
 
-  private async runUpload(clipId: string, clip: any) {
+  private async runUpload(clipId: string, clip: any, youtubeAccountId: string, tournament: any) {
     const title = clip.title ?? clip.roundName ?? `Set ${clip.setOrder}`;
     let description = clip.description ?? '';
     if (!description) {
-      const descParts: string[] = [];
-      if (clip.roundName) descParts.push(clip.roundName);
-      if (clip.players) descParts.push(clip.players);
-      if (clip.score) descParts.push(`Score : ${clip.score}`);
-      description = descParts.join('\n');
+      const parts: string[] = [];
+      if (clip.roundName) parts.push(clip.roundName);
+      if (clip.players) parts.push(clip.players);
+      if (clip.score) parts.push(`Score : ${clip.score}`);
+      description = parts.join('\n');
     }
 
     try {
@@ -105,41 +131,29 @@ export class YouTubeController {
         title,
         description,
         thumbnailPath: clip.thumbnailPath,
-        privacyStatus: (clip.privacyStatus ?? 'unlisted') as 'public' | 'unlisted' | 'private',
+        privacyStatus: (clip.privacyStatus ?? 'unlisted') as any,
+        youtubeAccountId,
       });
 
-      await this.clipRepository.update(clipId, {
-        status: 'UPLOADED',
-        youtubeVideoId: videoId,
-      });
-
+      await this.clipRepository.update(clipId, { status: 'UPLOADED', youtubeVideoId: videoId });
       this.logger.log(`✅ Clip ${clipId} uploadé → https://youtu.be/${videoId}`);
 
-      // Add to tournament playlist
-      await this.addToTournamentPlaylist(clip, videoId);
+      await this.addToTournamentPlaylist(tournament, videoId, youtubeAccountId);
     } catch (err) {
       this.logger.error(`❌ Upload clip ${clipId} échoué: ${(err as Error).message}`);
       await this.clipRepository.update(clipId, { status: 'FAILED' });
     }
   }
 
-  private async addToTournamentPlaylist(clip: any, videoId: string): Promise<void> {
+  private async addToTournamentPlaylist(tournament: any, videoId: string, youtubeAccountId: string): Promise<void> {
     try {
-      const vod = await this.vodRepository.findById(clip.vodId);
-      if (!vod?.tournamentId) return;
-
-      const tournament = await this.tournamentRepository.findById(vod.tournamentId);
-      if (!tournament) return;
-
       let playlistId = tournament.youtubePlaylistId;
       if (!playlistId) {
-        playlistId = await this.youtubeService.createPlaylist(tournament.name);
+        playlistId = await this.youtubeService.createPlaylist(tournament.name, youtubeAccountId);
         await this.tournamentRepository.update(tournament.id, { youtubePlaylistId: playlistId });
       }
-
-      await this.youtubeService.addToPlaylist(playlistId, videoId);
+      await this.youtubeService.addToPlaylist(playlistId, videoId, youtubeAccountId);
     } catch (err) {
-      // Playlist failure should not fail the upload
       this.logger.warn(`Playlist add failed: ${(err as Error).message}`);
     }
   }
