@@ -56,8 +56,8 @@ export class YouTubeService {
     // Upsert account in DB
     await this.prisma.youtubeAccount.upsert({
       where: { channelId },
-      create: { channelId, channelName, tokens },
-      update: { channelName, tokens },
+      create: { channelId, channelName, tokens: tokens as any },
+      update: { channelName, tokens: tokens as any },
     });
 
     this.logger.log(`✅ Compte YouTube connecté: ${channelName} (${channelId})`);
