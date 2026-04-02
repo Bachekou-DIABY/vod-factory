@@ -290,4 +290,8 @@ export class ApiService {
   uploadClipToYoutube(clipId: string): Observable<{ message?: string; youtubeVideoId?: string; alreadyUploaded?: boolean }> {
     return this.http.post<any>(`${this.base}/clips/${clipId}/upload-youtube`, {});
   }
+
+  ensureTournamentPlaylist(tournamentId: string, opts: { privacyStatus: string; description: string }): Observable<{ playlistId: string; created: boolean }> {
+    return this.http.post<any>(`${this.base}/tournaments/${tournamentId}/playlist`, opts);
+  }
 }

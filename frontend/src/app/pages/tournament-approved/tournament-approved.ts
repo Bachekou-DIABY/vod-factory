@@ -1,10 +1,11 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api.service';
 
 @Component({
   selector: 'app-tournament-approved',
-  imports: [RouterLink],
+  imports: [RouterLink, FormsModule],
   template: `
     <div class="min-h-screen bg-gray-950 text-white p-8">
       <a [routerLink]="['/tournaments', slug]" class="text-sm text-gray-500 hover:text-gray-300 mb-6 inline-block">← Tournoi</a>
@@ -51,20 +52,56 @@ import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api
         } @else {
           <!-- Upload All Button -->
           @if (ytAuthenticated() && hasUploadable()) {
-            <div class="mb-4 flex justify-end gap-2">
-              <button (click)="downloadAll()"
-                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors">
-                ↓ Tout télécharger
-              </button>
-              <button (click)="uploadAll()"
-                [disabled]="uploadingAll()"
-                class="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                @if (uploadingAll()) {
-                  <span class="animate-spin">⏳</span> Upload en cours...
-                } @else {
-                  ▶ Tout uploader sur YouTube
-                }
-              </button>
+            <div class="mb-4 flex flex-col items-end gap-2">
+              <div class="flex gap-2">
+                <button (click)="downloadAll()"
+                  class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors">
+                  ↓ Tout télécharger
+                </button>
+                <button (click)="showPlaylistForm.set(!showPlaylistForm())"
+                  [disabled]="uploadingAll()"
+                  class="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                  @if (uploadingAll()) {
+                    <span>⏳</span> Upload en cours...
+                  } @else {
+                    ▶ Tout uploader sur YouTube
+                  }
+                </button>
+              </div>
+
+              @if (showPlaylistForm()) {
+                <div class="w-full bg-gray-900 border border-gray-700 rounded-xl p-4">
+                  <h3 class="text-sm font-semibold text-gray-200 mb-3">Playlist YouTube</h3>
+                  <div class="grid gap-3">
+                    <div>
+                      <label class="block text-xs text-gray-400 mb-1">Visibilité</label>
+                      <select [(ngModel)]="playlistPrivacy"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">
+                        <option value="public">Public</option>
+                        <option value="unlisted">Non répertorié</option>
+                        <option value="private">Privé</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs text-gray-400 mb-1">Description <span class="text-gray-600">(optionnel)</span></label>
+                      <textarea [(ngModel)]="playlistDescription" rows="3"
+                        placeholder="Description de la playlist..."
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500 resize-none">
+                      </textarea>
+                    </div>
+                    <div class="flex gap-2 justify-end">
+                      <button (click)="showPlaylistForm.set(false)"
+                        class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">
+                        Annuler
+                      </button>
+                      <button (click)="uploadAll()"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium transition-colors">
+                        ▶ Lancer l'upload
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              }
             </div>
           }
 
@@ -158,6 +195,9 @@ export class TournamentApprovedPage implements OnInit {
   youtubeAccounts = signal<YoutubeAccount[]>([]);
   uploadingAll = signal(false);
   uploadMsg = signal('');
+  showPlaylistForm = signal(false);
+  playlistPrivacy = 'public';
+  playlistDescription = '';
 
   ytAuthenticated() {
     return this.youtubeAccounts().length > 0;
@@ -227,10 +267,27 @@ export class TournamentApprovedPage implements OnInit {
   uploadAll() {
     const uploadable = this.clips().filter(c => c.status !== 'UPLOADED' && c.status !== 'UPLOADING');
     if (uploadable.length === 0) return;
+    const tournamentId = this.tournament()?.id;
+    if (!tournamentId) return;
+
     this.uploadingAll.set(true);
-    this.uploadMsg.set(`Upload de ${uploadable.length} clips en cours...`);
-    uploadable.forEach(c => this.uploadOne(c));
-    setTimeout(() => this.uploadingAll.set(false), 2000);
+    this.showPlaylistForm.set(false);
+    this.uploadMsg.set('Création de la playlist...');
+
+    this.api.ensureTournamentPlaylist(tournamentId, {
+      privacyStatus: this.playlistPrivacy,
+      description: this.playlistDescription,
+    }).subscribe({
+      next: (res) => {
+        this.uploadMsg.set(`${res.created ? 'Playlist créée' : 'Playlist existante'} — Upload de ${uploadable.length} clips en cours...`);
+        uploadable.forEach(c => this.uploadOne(c));
+        setTimeout(() => this.uploadingAll.set(false), 2000);
+      },
+      error: (err) => {
+        this.uploadingAll.set(false);
+        this.uploadMsg.set('Erreur playlist: ' + (err.error?.message ?? err.message));
+      },
+    });
   }
 
   private pollClip(clipId: string, attempts = 0) {

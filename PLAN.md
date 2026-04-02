@@ -134,3 +134,14 @@ Le bug du slider est a fix aussi sur l'interface de gestion des clips la ou y'a 
 ![alt text](image.png) y'a marqué tournoi ajouté mais j'dois refresh pour pouvoir cliquer sur le tournoi
 
 ![alt text](image-1.png) j'ai importé une vod par l'url mais j'dois refresh pr voir la vod et surtout je sais meme pas si elle se dl vraiment pcq y'a une 502 
+
+Rajouter la possibilité de copier la meme description pour tout les clips d'une vod genre par ex a coté de la vod ou on peut faire des clips manuellement
+Pouvoir créer des clips manuel avec un timer format hh:mm:sec ( pareil que pr les clips dans l'interface de clip specifique)
+comme ça on peut rajouter de quoi améliorer le referenceemnt ( et rajouter SSBU Tournament dans la vod aide aussi)
+
+Qu'est-ce qui se passe si on veut utiliser l'outil en plein live (ca peut etre interessant pr realiser des live tweet)
+
+Ca me genere une playlist par dl pas une playlist par tournoi
+Et faudrait p't'etre envisager un delete auto des vods et clips au bout de 48h sinon on sera full space
+Ou en tt cas un moyen de limiter l'espace que peut prendre un utilisateur de la plateforme
+ET du mettre en place l'auth et qu'un utilisateur puisse upload au choix ses vods sur la chaine yt qu'il veut auquel il se sera connecté

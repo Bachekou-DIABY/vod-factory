@@ -152,14 +152,14 @@ export class YouTubeService {
     return videoId;
   }
 
-  async createPlaylist(title: string, youtubeAccountId: string): Promise<string> {
+  async createPlaylist(title: string, youtubeAccountId: string, options?: { description?: string; privacyStatus?: string }): Promise<string> {
     const client = await this.loadClientForAccount(youtubeAccountId);
     const yt = google.youtube({ version: 'v3', auth: client });
     const res = await yt.playlists.insert({
       part: ['snippet', 'status'],
       requestBody: {
-        snippet: { title },
-        status: { privacyStatus: 'public' },
+        snippet: { title, description: options?.description ?? '' },
+        status: { privacyStatus: options?.privacyStatus ?? 'public' },
       },
     });
     const playlistId = res.data.id!;

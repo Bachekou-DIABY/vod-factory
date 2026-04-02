@@ -5,6 +5,7 @@ import {
   Delete,
   Param,
   Query,
+  Body,
   Inject,
   Logger,
   NotFoundException,
@@ -67,6 +68,36 @@ export class YouTubeController {
   async disconnectAccount(@Param('id') id: string) {
     await this.youtubeService.disconnectAccount(id);
     return { message: 'Compte déconnecté' };
+  }
+
+  // ── Playlist ─────────────────────────────────────────────────────────
+
+  @Post('tournaments/:id/playlist')
+  async ensurePlaylist(
+    @Param('id') id: string,
+    @Body() body: { privacyStatus?: string; description?: string },
+  ) {
+    const tournament = await this.tournamentRepository.findById(id);
+    if (!tournament) throw new NotFoundException(`Tournoi ${id} non trouvé`);
+
+    if (tournament.youtubePlaylistId) {
+      return { playlistId: tournament.youtubePlaylistId, created: false };
+    }
+
+    const accounts = await this.youtubeService.listAccounts();
+    if (accounts.length === 0) {
+      throw new BadRequestException('Aucune chaîne YouTube connectée.');
+    }
+    const youtubeAccountId = accounts[0].id;
+
+    const playlistId = await this.youtubeService.createPlaylist(
+      tournament.name,
+      youtubeAccountId,
+      { privacyStatus: body.privacyStatus ?? 'public', description: body.description ?? '' },
+    );
+    await this.tournamentRepository.update(id, { youtubePlaylistId: playlistId });
+
+    return { playlistId, created: true };
   }
 
   // ── Upload ───────────────────────────────────────────────────────────
@@ -133,7 +164,9 @@ export class YouTubeController {
 
   private async addToTournamentPlaylist(tournament: any, videoId: string, youtubeAccountId: string): Promise<void> {
     try {
-      let playlistId = tournament.youtubePlaylistId;
+      // Re-fetch tournament to avoid race condition when multiple clips upload in parallel
+      const fresh = await this.tournamentRepository.findById(tournament.id);
+      let playlistId = fresh?.youtubePlaylistId;
       if (!playlistId) {
         playlistId = await this.youtubeService.createPlaylist(tournament.name, youtubeAccountId);
         await this.tournamentRepository.update(tournament.id, { youtubePlaylistId: playlistId });
