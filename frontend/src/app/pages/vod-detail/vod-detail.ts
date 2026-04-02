@@ -344,6 +344,7 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
             <div class="grid gap-3">
               @for (clip of clips(); track clip.id) {
                 <div class="flex flex-col bg-gray-900 rounded-lg border transition-colors"
+                  [id]="'clip-row-' + clip.id"
                   [class]="isSelected(clip.id) ? 'border-purple-600 bg-gray-800' : (expandedClipId() === clip.id ? 'border-orange-700' : 'border-gray-800')">
                   <!-- Clip row -->
                   <div class="flex gap-4 p-4">
@@ -969,6 +970,9 @@ export class VodDetailPage implements OnInit, OnDestroy {
     this.recutEnd.set(clip.endSeconds);
     this.recutMsg.set('');
     this.seekMainVideo(clip.startSeconds);
+    setTimeout(() => {
+      document.getElementById('clip-row-' + clip.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
   }
 
   seekMainVideo(t: number) {
