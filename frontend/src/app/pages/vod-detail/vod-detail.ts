@@ -343,68 +343,166 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
 
             <div class="grid gap-3">
               @for (clip of clips(); track clip.id) {
-                <div class="flex gap-4 bg-gray-900 rounded-lg p-4 border transition-colors"
-                  [class]="isSelected(clip.id) ? 'border-purple-600 bg-gray-800' : 'border-gray-800'">
-                  <div class="flex items-center shrink-0">
-                    <input type="checkbox" [checked]="isSelected(clip.id)" (change)="toggleClipSelection(clip.id)"
-                      class="w-4 h-4 rounded accent-purple-500 cursor-pointer" />
-                  </div>
-                  <a [routerLink]="['/clips', clip.id]" class="flex gap-4 flex-1 min-w-0 hover:opacity-80 transition-opacity">
-                    <div class="shrink-0 w-32 rounded overflow-hidden bg-gray-800" style="height:72px">
-                      <img
-                        [src]="api.getClipThumbnailUrl(clip.id)"
-                        class="w-full h-full object-cover"
-                        loading="lazy"
-                        (error)="$any($event.target).style.display='none'"
-                      />
+                <div class="flex flex-col bg-gray-900 rounded-lg border transition-colors"
+                  [class]="isSelected(clip.id) ? 'border-purple-600 bg-gray-800' : (expandedClipId() === clip.id ? 'border-orange-700' : 'border-gray-800')">
+                  <!-- Clip row -->
+                  <div class="flex gap-4 p-4">
+                    <div class="flex items-center shrink-0">
+                      <input type="checkbox" [checked]="isSelected(clip.id)" (change)="toggleClipSelection(clip.id)"
+                        class="w-4 h-4 rounded accent-purple-500 cursor-pointer" />
                     </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center justify-between mb-1">
-                        <div>
-                          <span class="text-sm text-gray-500 mr-2">Set {{ clip.setOrder }}</span>
-                          <span class="font-medium">{{ clip.roundName ?? 'Set ' + clip.setOrder }}</span>
-                        </div>
-                        <div class="flex items-center gap-3 text-sm shrink-0 ml-4">
-                          <span class="text-gray-400">{{ formatDuration(clip.startSeconds, clip.endSeconds) }}</span>
-                          <span class="px-2 py-0.5 rounded text-xs font-medium"
-                            [class]="clipStatusClass(clip.status)">{{ clip.status }}</span>
-                        </div>
+                    <a [routerLink]="['/clips', clip.id]" class="flex gap-4 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                      <div class="shrink-0 w-32 rounded overflow-hidden bg-gray-800" style="height:72px">
+                        <img
+                          [src]="api.getClipThumbnailUrl(clip.id)"
+                          class="w-full h-full object-cover"
+                          loading="lazy"
+                          (error)="$any($event.target).style.display='none'"
+                        />
                       </div>
-                      @if (clip.players) {
-                        <div class="text-sm text-gray-400">{{ clip.players }}</div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between mb-1">
+                          <div>
+                            <span class="text-sm text-gray-500 mr-2">Set {{ clip.setOrder }}</span>
+                            <span class="font-medium">{{ clip.roundName ?? 'Set ' + clip.setOrder }}</span>
+                          </div>
+                          <div class="flex items-center gap-3 text-sm shrink-0 ml-4">
+                            <span class="text-gray-400">{{ formatDuration(clip.startSeconds, clip.endSeconds) }}</span>
+                            <span class="px-2 py-0.5 rounded text-xs font-medium"
+                              [class]="clipStatusClass(clip.status)">{{ clip.status }}</span>
+                          </div>
+                        </div>
+                        @if (clip.players) {
+                          <div class="text-sm text-gray-400">{{ clip.players }}</div>
+                        }
+                        @if (clip.score) {
+                          <div class="text-xs text-gray-500 mt-0.5">{{ clip.score }}</div>
+                        }
+                      </div>
+                    </a>
+                    <div class="shrink-0 flex items-center gap-2 ml-2">
+                      @if (clip.status === 'FAILED') {
+                        <button
+                          (click)="retryClip(clip.id)"
+                          [disabled]="retryingClipId() === clip.id"
+                          class="px-3 py-1.5 bg-red-900 hover:bg-red-700 disabled:opacity-50 text-red-300 rounded-lg text-xs font-medium transition-colors"
+                          title="Relancer la génération de ce clip"
+                        >
+                          {{ retryingClipId() === clip.id ? '...' : '↺ Retry' }}
+                        </button>
                       }
-                      @if (clip.score) {
-                        <div class="text-xs text-gray-500 mt-0.5">{{ clip.score }}</div>
+                      @if (v.filePath) {
+                        <button
+                          (click)="toggleClipRecut(clip)"
+                          class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                          [class]="expandedClipId() === clip.id ? 'bg-orange-700 text-orange-100' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'"
+                          title="Recouper ce clip"
+                        >
+                          ✂️
+                        </button>
                       }
-                    </div>
-                  </a>
-                  <div class="shrink-0 flex items-center gap-2 ml-2">
-                    @if (clip.status === 'FAILED') {
+                      @if (clip.filePath) {
+                        <a [href]="api.getClipDownloadUrl(clip.id)" target="_blank"
+                          class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors"
+                          title="Télécharger le MP4">
+                          ↓
+                        </a>
+                      }
                       <button
-                        (click)="retryClip(clip.id)"
-                        [disabled]="retryingClipId() === clip.id"
-                        class="px-3 py-1.5 bg-red-900 hover:bg-red-700 disabled:opacity-50 text-red-300 rounded-lg text-xs font-medium transition-colors"
-                        title="Relancer la génération de ce clip"
+                        (click)="deleteClip($event, clip.id)"
+                        [disabled]="deletingClipId() === clip.id"
+                        class="px-3 py-1.5 bg-red-950 hover:bg-red-800 disabled:opacity-50 text-red-400 rounded-lg text-xs font-medium transition-colors"
+                        title="Supprimer ce clip"
                       >
-                        {{ retryingClipId() === clip.id ? '...' : '↺ Retry' }}
+                        {{ deletingClipId() === clip.id ? '...' : '🗑' }}
                       </button>
-                    }
-                    @if (clip.filePath) {
-                      <a [href]="api.getClipDownloadUrl(clip.id)" target="_blank"
-                        class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors"
-                        title="Télécharger le MP4">
-                        ↓
-                      </a>
-                    }
-                    <button
-                      (click)="deleteClip($event, clip.id)"
-                      [disabled]="deletingClipId() === clip.id"
-                      class="px-3 py-1.5 bg-red-950 hover:bg-red-800 disabled:opacity-50 text-red-400 rounded-lg text-xs font-medium transition-colors"
-                      title="Supprimer ce clip"
-                    >
-                      {{ deletingClipId() === clip.id ? '...' : '🗑' }}
-                    </button>
+                    </div>
                   </div>
+
+                  <!-- Inline recut panel -->
+                  @if (expandedClipId() === clip.id) {
+                    <div class="border-t border-orange-800 px-4 pb-4 pt-3 bg-gray-900/60">
+                      <div class="flex items-start justify-between mb-1">
+                        <h4 class="text-sm font-semibold text-orange-300">Recouper le clip</h4>
+                        <span class="text-xs text-gray-500 font-mono">
+                          {{ toHMS(recutStart()) }} — {{ toHMS(recutEnd()) }}
+                          <span class="text-gray-600 ml-1">({{ toHMS(recutEnd() - recutStart()) }})</span>
+                        </span>
+                      </div>
+                      <p class="text-xs text-gray-500 mb-3">
+                        Ajuste les bornes puis clique "Recouper". Le player VOD ci-dessus est synchronisé.
+                      </p>
+
+                      <!-- Dual-handle slider -->
+                      @if (vodDuration() > 0) {
+                        <div
+                          class="relative h-10 flex items-center mb-3 cursor-pointer select-none"
+                          (pointerdown)="onClipRecutPointerDown($event)"
+                        >
+                          <div class="absolute inset-x-2 h-2 bg-gray-700 rounded-full"></div>
+                          <div
+                            class="absolute h-2 bg-orange-600 rounded-full pointer-events-none"
+                            [style.left]="thumbPos(recutStartPct())"
+                            [style.right]="thumbPos(100 - recutEndPct())"
+                          ></div>
+                          <div
+                            class="absolute w-px h-4 bg-white/40 pointer-events-none"
+                            [style.left]="thumbPos(vodCurrentPct())"
+                          ></div>
+                          <div
+                            class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-orange-500 -translate-x-1/2 z-10 pointer-events-none"
+                            [style.left]="thumbPos(recutStartPct())"
+                          ></div>
+                          <div
+                            class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-orange-400 -translate-x-1/2 z-10 pointer-events-none"
+                            [style.left]="thumbPos(recutEndPct())"
+                          ></div>
+                        </div>
+                      }
+
+                      <!-- Controls -->
+                      <div class="flex gap-3 items-center flex-wrap mb-3">
+                        <div class="flex items-center gap-2">
+                          <label class="text-xs text-gray-500 w-12 shrink-0">Début</label>
+                          <input type="text" [value]="toHMS(recutStart())" (change)="onClipRecutStartInput($event)"
+                            class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-orange-500 outline-none font-mono"
+                            placeholder="hh:mm:ss" />
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <label class="text-xs text-gray-500 w-12 shrink-0">Fin</label>
+                          <input type="text" [value]="toHMS(recutEnd())" (change)="onClipRecutEndInput($event)"
+                            class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-orange-500 outline-none font-mono"
+                            placeholder="hh:mm:ss" />
+                        </div>
+                        <button (click)="seekMainVideo(recutStart())"
+                          class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
+                          ⏮ Début
+                        </button>
+                        <button (click)="seekMainVideo(recutEnd() - 5)"
+                          class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
+                          ⏭ Fin
+                        </button>
+                        <button (click)="setClipRecutFromCurrent('start')"
+                          class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
+                          📍 → Début
+                        </button>
+                        <button (click)="setClipRecutFromCurrent('end')"
+                          class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
+                          📍 → Fin
+                        </button>
+                      </div>
+
+                      <div class="flex items-center gap-3 flex-wrap">
+                        <button (click)="applyClipRecut(clip.id)" [disabled]="recutting()"
+                          class="px-5 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                          {{ recutting() ? 'Recut en cours...' : '✂️ Recouper' }}
+                        </button>
+                        @if (recutMsg()) {
+                          <span class="text-xs text-green-400">{{ recutMsg() }}</span>
+                        }
+                      </div>
+                    </div>
+                  }
                 </div>
               }
             </div>
@@ -437,6 +535,14 @@ export class VodDetailPage implements OnInit, OnDestroy {
   timestampUrl = '';
   selectedClipIds = signal<Set<string>>(new Set());
   bulkActing = signal(false);
+
+  // Inline clip recut
+  expandedClipId = signal<string | null>(null);
+  recutStart = signal(0);
+  recutEnd = signal(0);
+  recutting = signal(false);
+  recutMsg = signal('');
+  private clipRecutDragging: 'start' | 'end' | null = null;
 
   showImportSets = signal(false);
   importingSets = signal(false);
@@ -824,6 +930,135 @@ export class VodDetailPage implements OnInit, OnDestroy {
       },
     });
   }
+
+  // ── Inline clip recut ──────────────────────────────────────────────
+
+  toHMS(seconds: number): string {
+    const s = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  fromHMS(value: string): number {
+    const parts = value.trim().split(':').map(Number);
+    if (parts.some(isNaN)) return NaN;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return parts[0];
+  }
+
+  recutStartPct() {
+    const d = this.vodDuration();
+    return d > 0 ? (this.recutStart() / d) * 100 : 0;
+  }
+
+  recutEndPct() {
+    const d = this.vodDuration();
+    return d > 0 ? (this.recutEnd() / d) * 100 : 100;
+  }
+
+  toggleClipRecut(clip: Clip) {
+    if (this.expandedClipId() === clip.id) {
+      this.expandedClipId.set(null);
+      return;
+    }
+    this.expandedClipId.set(clip.id);
+    this.recutStart.set(clip.startSeconds);
+    this.recutEnd.set(clip.endSeconds);
+    this.recutMsg.set('');
+    this.seekMainVideo(clip.startSeconds);
+  }
+
+  seekMainVideo(t: number) {
+    const video = this.vodVideoEl?.nativeElement;
+    if (video) video.currentTime = Math.max(0, t);
+  }
+
+  setClipRecutFromCurrent(which: 'start' | 'end') {
+    const t = Math.floor(this.vodCurrentTime());
+    if (which === 'start') {
+      this.recutStart.set(Math.min(t, this.recutEnd() - 1));
+    } else {
+      if (t > this.recutStart()) this.recutEnd.set(t);
+    }
+  }
+
+  onClipRecutPointerDown(e: PointerEvent) {
+    const track = e.currentTarget as HTMLElement;
+    const rect = track.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left - 8) / (rect.width - 16)));
+    const val = pct * this.vodDuration();
+    const distStart = Math.abs(val - this.recutStart());
+    const distEnd = Math.abs(val - this.recutEnd());
+    this.clipRecutDragging = distStart <= distEnd ? 'start' : 'end';
+    (track as any).setPointerCapture(e.pointerId);
+    track.addEventListener('pointermove', this.onClipRecutPointerMove);
+    track.addEventListener('pointerup', this.onClipRecutPointerUp);
+    this.applyClipRecutDrag(pct);
+  }
+
+  private onClipRecutPointerMove = (e: PointerEvent) => {
+    const track = e.currentTarget as HTMLElement;
+    const rect = track.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left - 8) / (rect.width - 16)));
+    this.applyClipRecutDrag(pct);
+  };
+
+  private onClipRecutPointerUp = (e: PointerEvent) => {
+    const track = e.currentTarget as HTMLElement;
+    track.removeEventListener('pointermove', this.onClipRecutPointerMove);
+    track.removeEventListener('pointerup', this.onClipRecutPointerUp);
+    this.clipRecutDragging = null;
+  };
+
+  private applyClipRecutDrag(pct: number) {
+    const dur = this.vodDuration();
+    const val = pct * dur;
+    if (this.clipRecutDragging === 'start') {
+      this.recutStart.set(Math.max(0, Math.min(val, this.recutEnd() - 1)));
+      this.seekMainVideo(this.recutStart());
+    } else if (this.clipRecutDragging === 'end') {
+      this.recutEnd.set(Math.max(this.recutStart() + 1, Math.min(val, dur)));
+      this.seekMainVideo(this.recutEnd());
+    }
+  }
+
+  onClipRecutStartInput(e: Event) {
+    const val = this.fromHMS((e.target as HTMLInputElement).value);
+    if (!isNaN(val)) {
+      this.recutStart.set(Math.max(0, Math.min(val, this.recutEnd() - 1)));
+      this.seekMainVideo(this.recutStart());
+    }
+  }
+
+  onClipRecutEndInput(e: Event) {
+    const val = this.fromHMS((e.target as HTMLInputElement).value);
+    if (!isNaN(val)) {
+      this.recutEnd.set(Math.max(this.recutStart() + 1, Math.min(val, this.vodDuration())));
+      this.seekMainVideo(this.recutEnd());
+    }
+  }
+
+  applyClipRecut(clipId: string) {
+    this.recutting.set(true);
+    this.recutMsg.set('');
+    this.api.recutClip(clipId, Math.floor(this.recutStart()), Math.floor(this.recutEnd())).subscribe({
+      next: (updated) => {
+        this.recutting.set(false);
+        this.recutMsg.set('✓ Recut lancé !');
+        this.clips.update(cs => cs.map(c => c.id === clipId ? { ...c, startSeconds: updated.startSeconds, endSeconds: updated.endSeconds } : c));
+        setTimeout(() => { this.recutMsg.set(''); this.expandedClipId.set(null); }, 3000);
+      },
+      error: () => {
+        this.recutting.set(false);
+        this.recutMsg.set('Erreur lors du recut');
+      },
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
 
   formatTime(seconds: number): string {
     const h = Math.floor(seconds / 3600);
