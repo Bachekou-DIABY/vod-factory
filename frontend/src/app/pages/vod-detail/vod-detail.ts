@@ -116,6 +116,98 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
             (timeupdate)="onVodTimeUpdate()"
           ></video>
 
+          <!-- Recut panel (anchored below player) -->
+          @if (expandedClip(); as clip) {
+            <div class="bg-gray-900 border border-orange-700 rounded-xl px-4 pb-4 pt-3 mb-4 max-w-4xl">
+              <div class="flex items-start justify-between mb-1">
+                <div class="min-w-0">
+                  <h4 class="text-sm font-semibold text-orange-300">Recouper le clip</h4>
+                  <p class="text-xs text-gray-400 truncate mt-0.5">{{ clip.title ?? clip.roundName ?? ('Set ' + clip.setOrder) }}</p>
+                </div>
+                <span class="text-xs text-gray-500 font-mono shrink-0 ml-4">
+                  {{ toHMS(recutStart()) }} — {{ toHMS(recutEnd()) }}
+                  <span class="text-gray-600 ml-1">({{ toHMS(recutEnd() - recutStart()) }})</span>
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 mb-3">
+                Ajuste les bornes puis clique "Recouper". Le player VOD ci-dessus est synchronisé.
+              </p>
+
+              <!-- Dual-handle slider -->
+              @if (vodDuration() > 0) {
+                <div
+                  class="relative h-10 flex items-center mb-3 cursor-pointer select-none"
+                  (pointerdown)="onClipRecutPointerDown($event)"
+                >
+                  <div class="absolute inset-x-2 h-2 bg-gray-700 rounded-full"></div>
+                  <div
+                    class="absolute h-2 bg-orange-600 rounded-full pointer-events-none"
+                    [style.left]="thumbPos(recutStartPct())"
+                    [style.right]="thumbPos(100 - recutEndPct())"
+                  ></div>
+                  <div
+                    class="absolute w-px h-4 bg-white/40 pointer-events-none"
+                    [style.left]="thumbPos(vodCurrentPct())"
+                  ></div>
+                  <div
+                    class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-orange-500 -translate-x-1/2 z-10 pointer-events-none"
+                    [style.left]="thumbPos(recutStartPct())"
+                  ></div>
+                  <div
+                    class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-orange-400 -translate-x-1/2 z-10 pointer-events-none"
+                    [style.left]="thumbPos(recutEndPct())"
+                  ></div>
+                </div>
+              }
+
+              <!-- Controls -->
+              <div class="flex gap-3 items-center flex-wrap mb-3">
+                <div class="flex items-center gap-2">
+                  <label class="text-xs text-gray-500 w-12 shrink-0">Début</label>
+                  <input type="text" [value]="toHMS(recutStart())" (change)="onClipRecutStartInput($event)"
+                    class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-orange-500 outline-none font-mono"
+                    placeholder="hh:mm:ss" />
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="text-xs text-gray-500 w-12 shrink-0">Fin</label>
+                  <input type="text" [value]="toHMS(recutEnd())" (change)="onClipRecutEndInput($event)"
+                    class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-orange-500 outline-none font-mono"
+                    placeholder="hh:mm:ss" />
+                </div>
+                <button (click)="seekMainVideo(recutStart())"
+                  class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
+                  ⏮ Début
+                </button>
+                <button (click)="seekMainVideo(recutEnd() - 5)"
+                  class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
+                  ⏭ Fin
+                </button>
+                <button (click)="setClipRecutFromCurrent('start')"
+                  class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
+                  📍 → Début
+                </button>
+                <button (click)="setClipRecutFromCurrent('end')"
+                  class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
+                  📍 → Fin
+                </button>
+              </div>
+
+              <div class="flex items-center gap-3 flex-wrap">
+                <button (click)="applyClipRecut(clip.id)" [disabled]="recutting()"
+                  class="px-5 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                  {{ recutting() ? 'Recut en cours...' : '✂️ Recouper' }}
+                </button>
+                <button (click)="expandedClipId.set(null)"
+                  class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">
+                  Fermer
+                </button>
+                @if (recutMsg()) {
+                  <span class="text-xs text-green-400">{{ recutMsg() }}</span>
+                }
+              </div>
+            </div>
+          }
+
           <!-- Manual clip section -->
           <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-8 max-w-4xl">
             <div class="flex items-center justify-between mb-1">
@@ -420,90 +512,6 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                     </div>
                   </div>
 
-                  <!-- Inline recut panel -->
-                  @if (expandedClipId() === clip.id) {
-                    <div class="border-t border-orange-800 px-4 pb-4 pt-3 bg-gray-900/60">
-                      <div class="flex items-start justify-between mb-1">
-                        <h4 class="text-sm font-semibold text-orange-300">Recouper le clip</h4>
-                        <span class="text-xs text-gray-500 font-mono">
-                          {{ toHMS(recutStart()) }} — {{ toHMS(recutEnd()) }}
-                          <span class="text-gray-600 ml-1">({{ toHMS(recutEnd() - recutStart()) }})</span>
-                        </span>
-                      </div>
-                      <p class="text-xs text-gray-500 mb-3">
-                        Ajuste les bornes puis clique "Recouper". Le player VOD ci-dessus est synchronisé.
-                      </p>
-
-                      <!-- Dual-handle slider -->
-                      @if (vodDuration() > 0) {
-                        <div
-                          class="relative h-10 flex items-center mb-3 cursor-pointer select-none"
-                          (pointerdown)="onClipRecutPointerDown($event)"
-                        >
-                          <div class="absolute inset-x-2 h-2 bg-gray-700 rounded-full"></div>
-                          <div
-                            class="absolute h-2 bg-orange-600 rounded-full pointer-events-none"
-                            [style.left]="thumbPos(recutStartPct())"
-                            [style.right]="thumbPos(100 - recutEndPct())"
-                          ></div>
-                          <div
-                            class="absolute w-px h-4 bg-white/40 pointer-events-none"
-                            [style.left]="thumbPos(vodCurrentPct())"
-                          ></div>
-                          <div
-                            class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-orange-500 -translate-x-1/2 z-10 pointer-events-none"
-                            [style.left]="thumbPos(recutStartPct())"
-                          ></div>
-                          <div
-                            class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-orange-400 -translate-x-1/2 z-10 pointer-events-none"
-                            [style.left]="thumbPos(recutEndPct())"
-                          ></div>
-                        </div>
-                      }
-
-                      <!-- Controls -->
-                      <div class="flex gap-3 items-center flex-wrap mb-3">
-                        <div class="flex items-center gap-2">
-                          <label class="text-xs text-gray-500 w-12 shrink-0">Début</label>
-                          <input type="text" [value]="toHMS(recutStart())" (change)="onClipRecutStartInput($event)"
-                            class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-orange-500 outline-none font-mono"
-                            placeholder="hh:mm:ss" />
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <label class="text-xs text-gray-500 w-12 shrink-0">Fin</label>
-                          <input type="text" [value]="toHMS(recutEnd())" (change)="onClipRecutEndInput($event)"
-                            class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-orange-500 outline-none font-mono"
-                            placeholder="hh:mm:ss" />
-                        </div>
-                        <button (click)="seekMainVideo(recutStart())"
-                          class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
-                          ⏮ Début
-                        </button>
-                        <button (click)="seekMainVideo(recutEnd() - 5)"
-                          class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
-                          ⏭ Fin
-                        </button>
-                        <button (click)="setClipRecutFromCurrent('start')"
-                          class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
-                          📍 → Début
-                        </button>
-                        <button (click)="setClipRecutFromCurrent('end')"
-                          class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
-                          📍 → Fin
-                        </button>
-                      </div>
-
-                      <div class="flex items-center gap-3 flex-wrap">
-                        <button (click)="applyClipRecut(clip.id)" [disabled]="recutting()"
-                          class="px-5 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
-                          {{ recutting() ? 'Recut en cours...' : '✂️ Recouper' }}
-                        </button>
-                        @if (recutMsg()) {
-                          <span class="text-xs text-green-400">{{ recutMsg() }}</span>
-                        }
-                      </div>
-                    </div>
-                  }
                 </div>
               }
             </div>
@@ -539,6 +547,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
 
   // Inline clip recut
   expandedClipId = signal<string | null>(null);
+  expandedClip = computed(() => this.clips().find(c => c.id === this.expandedClipId()) ?? null);
   recutStart = signal(0);
   recutEnd = signal(0);
   recutting = signal(false);
@@ -971,7 +980,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
     this.recutMsg.set('');
     this.seekMainVideo(clip.startSeconds);
     setTimeout(() => {
-      this.vodVideoEl?.nativeElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      this.vodVideoEl?.nativeElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 50);
   }
 
