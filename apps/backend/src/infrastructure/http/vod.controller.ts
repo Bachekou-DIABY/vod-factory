@@ -264,11 +264,9 @@ export class VodController {
   private runRemux(vodId: string, inputPath: string, outputPath: string) {
     const proc = spawn('ffmpeg', [
       '-i', inputPath,
-      '-c', 'copy',
       '-c:v', 'copy',
-      '-c:a', 'aac',
-      '-b:a', '192k',
-      '-movflags', '+faststart',
+      '-c:a', 'copy',
+      '-bsf:a', 'aac_adtstoasc',
       '-y',
       outputPath,
     ]);

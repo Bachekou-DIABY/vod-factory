@@ -39,7 +39,7 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
               }
             </div>
             <span class="inline-block px-3 py-1 rounded-full text-xs font-medium"
-              [class]="statusClass(v.status)">{{ v.status }}</span>
+              [class]="statusClass(v.status)">{{ statusLabel(v.status) }}</span>
           </div>
           <div class="flex gap-2 shrink-0 ml-4">
             @if (v.filePath) {
@@ -835,6 +835,20 @@ export class VodDetailPage implements OnInit, OnDestroy {
 
   formatDuration(start: number, end: number): string {
     return Math.round((end - start) / 60) + ' min';
+  }
+
+  statusLabel(status: string): string {
+    const map: Record<string, string> = {
+      PENDING: 'En attente',
+      DOWNLOADING: 'Téléchargement',
+      DOWNLOADED: 'Téléchargé',
+      ANALYZING: 'Analyse',
+      ANALYZED: 'Analysé',
+      PROCESSING: 'Conversion en cours...',
+      COMPLETED: 'Complété',
+      FAILED: 'Échec',
+    };
+    return map[status] ?? status;
   }
 
   statusClass(status: string): string {

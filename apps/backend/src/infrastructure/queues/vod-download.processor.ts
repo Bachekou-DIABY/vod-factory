@@ -55,10 +55,14 @@ export class VodDownloadProcessor extends WorkerHost {
 
       const probe = await this.ffprobe.probe(result.filePath);
 
+      // Convertir mpegts → MP4 propre si nécessaire
+      await this.vodRepository.updateStatus(vodId, VodStatus.PROCESSING);
+      const finalPath = await this.remuxFaststart(result.filePath);
+
       await this.vodRepository.update(vodId, {
-        filePath: result.filePath,
+        filePath: finalPath,
         status: VodStatus.DOWNLOADED,
-        fileSize: result.fileSize,
+        fileSize: fs.existsSync(finalPath) ? fs.statSync(finalPath).size : result.fileSize,
         duration: probe.duration || result.duration,
         resolution: probe.resolution,
         fps: probe.fps,
@@ -66,7 +70,7 @@ export class VodDownloadProcessor extends WorkerHost {
       });
 
       this.downloadProgress.clear(vodId);
-      this.logger.log(`✅ [Job ${job.id}] VOD ${vodId} prête: ${result.filePath}`);
+      this.logger.log(`✅ [Job ${job.id}] VOD ${vodId} prête: ${finalPath}`);
     } catch (err) {
       this.downloadProgress.clear(vodId);
       this.logger.error(`❌ [Job ${job.id}] Erreur download VOD ${vodId}: ${err.message}`);
@@ -110,11 +114,9 @@ export class VodDownloadProcessor extends WorkerHost {
     return new Promise((resolve) => {
       const proc = spawn('ffmpeg', [
         '-i', inputPath,
-        '-c', 'copy',
         '-c:v', 'copy',
-      '-c:a', 'aac',
-      '-b:a', '192k',
-      '-movflags', '+faststart',
+        '-c:a', 'copy',
+        '-bsf:a', 'aac_adtstoasc',
         '-y',
         outputPath,
       ]);
