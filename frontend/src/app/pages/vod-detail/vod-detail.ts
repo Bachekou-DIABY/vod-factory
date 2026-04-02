@@ -971,7 +971,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
     this.recutMsg.set('');
     this.seekMainVideo(clip.startSeconds);
     setTimeout(() => {
-      document.getElementById('clip-row-' + clip.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      this.vodVideoEl?.nativeElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
   }
 
