@@ -10,6 +10,13 @@ export interface Tournament {
   startAt?: string;
 }
 
+export interface YoutubeAccount {
+  id: string;
+  channelId: string;
+  channelName: string;
+  createdAt: string;
+}
+
 export interface StartGGEvent {
   id: string;
   name: string;
@@ -267,13 +274,17 @@ export class ApiService {
     );
   }
 
-  // YouTube
-  getYoutubeStatus(): Observable<{ authenticated: boolean }> {
-    return this.http.get<{ authenticated: boolean }>(`${this.base}/youtube/status`);
+  // YouTube accounts
+  getYoutubeAuthUrl(): Observable<{ url: string }> {
+    return this.http.get<{ url: string }>(`${this.base}/youtube/auth-url`);
   }
 
-  getYoutubeAuthUrl(): Observable<{ url: string; authenticated: boolean }> {
-    return this.http.get<{ url: string; authenticated: boolean }>(`${this.base}/youtube/auth-url`);
+  getYoutubeAccounts(): Observable<YoutubeAccount[]> {
+    return this.http.get<YoutubeAccount[]>(`${this.base}/youtube/accounts`);
+  }
+
+  disconnectYoutubeAccount(id: string): Observable<any> {
+    return this.http.delete(`${this.base}/youtube/accounts/${id}`);
   }
 
   uploadClipToYoutube(clipId: string): Observable<{ message?: string; youtubeVideoId?: string; alreadyUploaded?: boolean }> {

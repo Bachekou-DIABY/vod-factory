@@ -13,7 +13,7 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
       @if (loading()) {
         <p class="text-gray-400">Chargement...</p>
       } @else {
-        <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold">{{ tournament()?.name ?? slug }}</h1>
           <div class="flex gap-2">
             <a [routerLink]="['/tournaments', slug, 'approved']"
@@ -28,6 +28,7 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
             </button>
           </div>
         </div>
+
 
         <!-- Add VOD form -->
         @if (showAddForm()) {

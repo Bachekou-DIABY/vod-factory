@@ -3,7 +3,6 @@ import {
   Get,
   Post,
   Delete,
-  Patch,
   Param,
   Query,
   Inject,
@@ -70,19 +69,6 @@ export class YouTubeController {
     return { message: 'Compte déconnecté' };
   }
 
-  // ── Tournament ↔ account association ────────────────────────────────
-
-  @Patch('tournaments/:id/youtube-account')
-  async setTournamentAccount(
-    @Param('id') id: string,
-    @Query('accountId') accountId: string,
-  ) {
-    const tournament = await this.tournamentRepository.findById(id);
-    if (!tournament) throw new NotFoundException(`Tournoi ${id} non trouvé`);
-    await this.tournamentRepository.update(id, { youtubeAccountId: accountId || null } as any);
-    return { message: 'Compte YouTube associé au tournoi' };
-  }
-
   // ── Upload ───────────────────────────────────────────────────────────
 
   @Post('clips/:id/upload-youtube')
@@ -93,18 +79,18 @@ export class YouTubeController {
     if (clip.status === 'UPLOADING') throw new BadRequestException('Upload déjà en cours');
     if (clip.status === 'UPLOADED') return { youtubeVideoId: clip.youtubeVideoId, alreadyUploaded: true };
 
-    // Find YouTube account via VOD → tournament
-    const vod = await this.vodRepository.findById(clip.vodId);
-    if (!vod?.tournamentId) throw new BadRequestException('VOD non associée à un tournoi');
-    const tournament = await this.tournamentRepository.findById(vod.tournamentId);
-    if (!tournament) throw new NotFoundException('Tournoi introuvable');
-
-    const youtubeAccountId = (tournament as any).youtubeAccountId;
-    if (!youtubeAccountId) {
-      throw new BadRequestException(
-        'Aucune chaîne YouTube associée à ce tournoi. Connecte un compte dans les paramètres du tournoi.',
-      );
+    // Use the first connected YouTube account
+    const accounts = await this.youtubeService.listAccounts();
+    if (accounts.length === 0) {
+      throw new BadRequestException('Aucune chaîne YouTube connectée. Connecte-en une depuis la page d\'accueil.');
     }
+    const youtubeAccountId = accounts[0].id;
+
+    // Load tournament for playlist creation
+    const vod = await this.vodRepository.findById(clip.vodId);
+    const tournament = vod?.tournamentId
+      ? await this.tournamentRepository.findById(vod.tournamentId)
+      : null;
 
     await this.clipRepository.update(id, { status: 'UPLOADING' });
     this.runUpload(id, clip, youtubeAccountId, tournament).catch((err) => {

@@ -1,7 +1,7 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { ApiService, Tournament, StartGGTournamentResult } from '../../services/api.service';
+import { ApiService, Tournament, StartGGTournamentResult, YoutubeAccount } from '../../services/api.service';
 
 @Component({
   selector: 'app-tournaments',
@@ -25,7 +25,6 @@ import { ApiService, Tournament, StartGGTournamentResult } from '../../services/
           }
         </div>
 
-        <!-- URL import shortcut -->
         @if (isUrl()) {
           <div class="flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3">
             <span class="text-sm text-gray-300 flex-1 truncate">Slug détecté : <span class="text-white font-mono">{{ extractedSlug() }}</span></span>
@@ -39,7 +38,6 @@ import { ApiService, Tournament, StartGGTournamentResult } from '../../services/
           </div>
         }
 
-        <!-- Search results -->
         @if (searchResults().length) {
           <div class="mt-2 border border-gray-700 rounded-xl overflow-hidden">
             @for (result of searchResults(); track result.id) {
@@ -75,7 +73,7 @@ import { ApiService, Tournament, StartGGTournamentResult } from '../../services/
       @if (loading()) {
         <p class="text-gray-400">Chargement...</p>
       } @else {
-        <div>
+        <div class="mb-12">
           @if (tournaments().length) {
             <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Tournois importés</h2>
           }
@@ -97,6 +95,52 @@ import { ApiService, Tournament, StartGGTournamentResult } from '../../services/
           </div>
         </div>
       }
+
+      <!-- YouTube accounts section -->
+      <div class="border-t border-gray-800 pt-8">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-base font-semibold">Comptes YouTube</h2>
+            <p class="text-xs text-gray-500 mt-0.5">Connecte les chaînes YouTube qui recevront les clips.</p>
+          </div>
+          <button
+            (click)="connectYoutube()"
+            [disabled]="connectingYoutube()"
+            class="px-4 py-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          >
+            {{ connectingYoutube() ? '...' : '+ Connecter une chaîne' }}
+          </button>
+        </div>
+
+        @if (loadingAccounts()) {
+          <p class="text-gray-500 text-sm">Chargement...</p>
+        } @else if (youtubeAccounts().length === 0) {
+          <p class="text-gray-600 text-sm">Aucune chaîne connectée.</p>
+        } @else {
+          <div class="grid gap-2">
+            @for (account of youtubeAccounts(); track account.id) {
+              <div class="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-red-800 flex items-center justify-center text-sm font-bold">
+                    {{ account.channelName[0] }}
+                  </div>
+                  <div>
+                    <div class="text-sm font-medium">{{ account.channelName }}</div>
+                    <div class="text-xs text-gray-500 font-mono">{{ account.channelId }}</div>
+                  </div>
+                </div>
+                <button
+                  (click)="disconnectAccount(account.id)"
+                  [disabled]="disconnectingId() === account.id"
+                  class="px-3 py-1.5 bg-gray-800 hover:bg-red-900 disabled:opacity-50 text-gray-400 hover:text-red-300 rounded-lg text-xs transition-colors"
+                >
+                  {{ disconnectingId() === account.id ? '...' : 'Déconnecter' }}
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
     </div>
   `,
 })
@@ -113,12 +157,48 @@ export class TournamentsPage implements OnInit {
   importError = signal('');
   importSuccess = signal('');
 
+  youtubeAccounts = signal<YoutubeAccount[]>([]);
+  loadingAccounts = signal(true);
+  connectingYoutube = signal(false);
+  disconnectingId = signal<string | null>(null);
+
   private searchTimer: any;
 
   ngOnInit() {
     this.api.getTournaments().subscribe({
       next: (data) => { this.tournaments.set(data); this.loading.set(false); },
       error: () => this.loading.set(false),
+    });
+    this.api.getYoutubeAccounts().subscribe({
+      next: (accounts) => { this.youtubeAccounts.set(accounts); this.loadingAccounts.set(false); },
+      error: () => this.loadingAccounts.set(false),
+    });
+  }
+
+  connectYoutube() {
+    this.connectingYoutube.set(true);
+    this.api.getYoutubeAuthUrl().subscribe({
+      next: ({ url }) => {
+        this.connectingYoutube.set(false);
+        window.open(url, '_blank', 'width=600,height=700');
+        // Refresh accounts after a few seconds (user completes OAuth)
+        setTimeout(() => {
+          this.api.getYoutubeAccounts().subscribe((a) => this.youtubeAccounts.set(a));
+        }, 5000);
+      },
+      error: () => this.connectingYoutube.set(false),
+    });
+  }
+
+  disconnectAccount(id: string) {
+    if (!confirm('Déconnecter cette chaîne YouTube ?')) return;
+    this.disconnectingId.set(id);
+    this.api.disconnectYoutubeAccount(id).subscribe({
+      next: () => {
+        this.youtubeAccounts.update((a) => a.filter((x) => x.id !== id));
+        this.disconnectingId.set(null);
+      },
+      error: () => this.disconnectingId.set(null),
     });
   }
 

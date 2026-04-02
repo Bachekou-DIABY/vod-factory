@@ -1,6 +1,6 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, Clip, Tournament } from '../../services/api.service';
+import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api.service';
 
 @Component({
   selector: 'app-tournament-approved',
@@ -29,12 +29,12 @@ import { ApiService, Clip, Tournament } from '../../services/api.service';
           <div class="mb-6 p-4 bg-red-950 border border-red-800 rounded-xl flex items-center justify-between gap-4">
             <div>
               <p class="font-medium text-red-300">YouTube non connecté</p>
-              <p class="text-sm text-red-400 mt-0.5">Connecte ton compte Google pour uploader les clips.</p>
+              <p class="text-sm text-red-400 mt-0.5">Connecte ta chaîne YouTube depuis la page d'accueil.</p>
             </div>
-            <button (click)="connectYoutube()"
+            <a routerLink="/"
               class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium transition-colors shrink-0">
-              Connecter YouTube
-            </button>
+              Connecter
+            </a>
           </div>
         } @else {
           <div class="mb-6 p-3 bg-green-950 border border-green-800 rounded-xl flex items-center gap-3">
@@ -155,15 +155,19 @@ export class TournamentApprovedPage implements OnInit {
   tournament = signal<Tournament | null>(null);
   clips = signal<Clip[]>([]);
   loading = signal(true);
-  ytAuthenticated = signal(false);
+  youtubeAccounts = signal<YoutubeAccount[]>([]);
   uploadingAll = signal(false);
   uploadMsg = signal('');
+
+  ytAuthenticated() {
+    return this.youtubeAccounts().length > 0;
+  }
 
   ngOnInit() {
     this.slug = this.route.snapshot.paramMap.get('slug')!;
 
-    this.api.getYoutubeStatus().subscribe({
-      next: (s) => this.ytAuthenticated.set(s.authenticated),
+    this.api.getYoutubeAccounts().subscribe({
+      next: (accounts) => this.youtubeAccounts.set(accounts),
       error: () => {},
     });
 
