@@ -252,15 +252,15 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
               <div class="flex gap-4 items-center flex-wrap mb-4">
                 <div class="flex items-center gap-2">
                   <label class="text-xs text-gray-500 w-12 shrink-0">Début</label>
-                  <input type="number" step="1" [value]="manualStart()" (change)="onManualStartInput($event)"
-                    class="w-24 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-blue-500 outline-none font-mono" />
-                  <span class="text-xs text-gray-600">s</span>
+                  <input type="text" [value]="toHMS(manualStart())" (change)="onManualStartInput($event)"
+                    class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-blue-500 outline-none font-mono"
+                    placeholder="hh:mm:ss" />
                 </div>
                 <div class="flex items-center gap-2">
                   <label class="text-xs text-gray-500 w-12 shrink-0">Fin</label>
-                  <input type="number" step="1" [value]="manualEnd()" (change)="onManualEndInput($event)"
-                    class="w-24 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-blue-500 outline-none font-mono" />
-                  <span class="text-xs text-gray-600">s</span>
+                  <input type="text" [value]="toHMS(manualEnd())" (change)="onManualEndInput($event)"
+                    class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-blue-500 outline-none font-mono"
+                    placeholder="hh:mm:ss" />
                 </div>
                 <button (click)="setManualStartFromCurrent()"
                   class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
@@ -392,6 +392,26 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                 <span class="text-sm" [class]="importSuccess() ? 'text-green-400' : 'text-red-400'">{{ importMsg() }}</span>
               }
             </div>
+          </div>
+        }
+
+        <!-- Description commune -->
+        @if (clips().length) {
+          <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6 max-w-4xl">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-semibold text-gray-200">Description commune</h3>
+              <button (click)="applySharedDescription()" [disabled]="!sharedDescription.trim() || applyingDescription()"
+                class="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 disabled:opacity-40 rounded-lg text-xs font-medium transition-colors">
+                {{ applyingDescription() ? 'Application...' : 'Appliquer à tous les clips' }}
+              </button>
+            </div>
+            <textarea [(ngModel)]="sharedDescription" rows="3"
+              placeholder="Description YouTube qui sera appliquée à tous les clips de cette VOD..."
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none">
+            </textarea>
+            @if (sharedDescriptionMsg()) {
+              <p class="text-green-400 text-xs mt-1">{{ sharedDescriptionMsg() }}</p>
+            }
           </div>
         }
 
@@ -570,6 +590,9 @@ export class VodDetailPage implements OnInit, OnDestroy {
   manualTitle = '';
   creatingManualClip = signal(false);
   manualClipMsg = signal('');
+  sharedDescription = '';
+  applyingDescription = signal(false);
+  sharedDescriptionMsg = signal('');
   private manualDragging: 'start' | 'end' | null = null;
 
   isLocalVod(): boolean {
@@ -734,12 +757,12 @@ export class VodDetailPage implements OnInit, OnDestroy {
   }
 
   onManualStartInput(e: Event) {
-    const val = parseFloat((e.target as HTMLInputElement).value);
+    const val = this.fromHMS((e.target as HTMLInputElement).value);
     if (!isNaN(val)) this.manualStart.set(Math.max(0, Math.min(val, this.manualEnd() - 1)));
   }
 
   onManualEndInput(e: Event) {
-    const val = parseFloat((e.target as HTMLInputElement).value);
+    const val = this.fromHMS((e.target as HTMLInputElement).value);
     if (!isNaN(val)) this.manualEnd.set(Math.max(this.manualStart() + 1, Math.min(val, this.vodDuration())));
   }
 
@@ -762,6 +785,31 @@ export class VodDetailPage implements OnInit, OnDestroy {
         }, 4000);
       },
       error: () => this.creatingManualClip.set(false),
+    });
+  }
+
+  applySharedDescription() {
+    const desc = this.sharedDescription.trim();
+    if (!desc) return;
+    const clips = this.clips();
+    if (clips.length === 0) return;
+    this.applyingDescription.set(true);
+    let done = 0;
+    clips.forEach(clip => {
+      this.api.updateClip(clip.id, { description: desc }).subscribe({
+        next: () => {
+          done++;
+          if (done === clips.length) {
+            this.applyingDescription.set(false);
+            this.sharedDescriptionMsg.set(`Description appliquée à ${clips.length} clip${clips.length > 1 ? 's' : ''}.`);
+            setTimeout(() => this.sharedDescriptionMsg.set(''), 3000);
+          }
+        },
+        error: () => {
+          done++;
+          if (done === clips.length) this.applyingDescription.set(false);
+        },
+      });
     });
   }
 
