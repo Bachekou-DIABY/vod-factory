@@ -34,6 +34,7 @@ model Tournament {
   startGGId          String?  @unique
   youtubePlaylistId  String?
   youtubeAccountId   String?
+  archivedAt         DateTime?
   createdAt          DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

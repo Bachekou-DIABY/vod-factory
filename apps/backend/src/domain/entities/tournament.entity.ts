@@ -7,6 +7,7 @@ export interface Tournament {
   startGGId?: string;
   youtubePlaylistId?: string;
   youtubeAccountId?: string;
+  archivedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

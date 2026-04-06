@@ -117,6 +117,22 @@ export class ApiService {
     return this.cached('tournaments', this.http.get<Tournament[]>(`${this.base}/tournaments`), 30000);
   }
 
+  getArchivedTournaments(): Observable<Tournament[]> {
+    return this.http.get<Tournament[]>(`${this.base}/tournaments/archived`);
+  }
+
+  archiveTournament(id: string): Observable<any> {
+    return this.http.patch(`${this.base}/tournaments/${id}/archive`, {}).pipe(
+      tap(() => { this.invalidate('tournaments'); }),
+    );
+  }
+
+  unarchiveTournament(id: string): Observable<any> {
+    return this.http.patch(`${this.base}/tournaments/${id}/unarchive`, {}).pipe(
+      tap(() => { this.invalidate('tournaments'); }),
+    );
+  }
+
   getTournamentBySlug(slug: string): Observable<Tournament> {
     return this.cached(`tournament:${slug}`, this.http.get<Tournament>(`${this.base}/tournaments/${slug}`), 30000);
   }

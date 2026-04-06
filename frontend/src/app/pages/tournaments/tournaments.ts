@@ -69,31 +69,74 @@ import { ApiService, Tournament, StartGGTournamentResult, YoutubeAccount } from 
         }
       </div>
 
-      <!-- Local tournaments list -->
-      @if (loading()) {
-        <p class="text-gray-400">Chargement...</p>
-      } @else {
-        <div class="mb-12">
-          @if (tournaments().length) {
-            <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Tournois importés</h2>
-          }
-          <div class="grid gap-3">
+      <!-- Tabs -->
+      <div class="flex gap-1 mb-6 border-b border-gray-800">
+        <button (click)="activeTab.set('active')"
+          [class]="activeTab() === 'active' ? 'px-4 py-2 text-sm font-medium border-b-2 border-white text-white' : 'px-4 py-2 text-sm text-gray-500 hover:text-gray-300'">
+          Actifs
+          @if (tournaments().length) { <span class="ml-1.5 text-xs opacity-60">{{ tournaments().length }}</span> }
+        </button>
+        <button (click)="switchToArchived()"
+          [class]="activeTab() === 'archived' ? 'px-4 py-2 text-sm font-medium border-b-2 border-white text-white' : 'px-4 py-2 text-sm text-gray-500 hover:text-gray-300'">
+          Archives
+          @if (archivedTournaments().length) { <span class="ml-1.5 text-xs opacity-60">{{ archivedTournaments().length }}</span> }
+        </button>
+      </div>
+
+      <!-- Active tournaments -->
+      @if (activeTab() === 'active') {
+        @if (loading()) {
+          <p class="text-gray-400">Chargement...</p>
+        } @else {
+          <div class="grid gap-3 mb-12">
             @for (t of tournaments(); track t.id) {
-              <a
-                [routerLink]="['/tournaments', t.slug]"
-                class="flex items-center justify-between bg-gray-900 rounded-xl p-4 hover:bg-gray-800 transition-colors border border-gray-800"
-              >
-                <div>
+              <div class="flex items-center justify-between bg-gray-900 rounded-xl p-4 border border-gray-800 group">
+                <a [routerLink]="['/tournaments', t.slug]" class="flex-1 hover:opacity-80 transition-opacity">
                   <div class="font-medium">{{ t.name }}</div>
                   <div class="text-xs text-gray-500 font-mono mt-0.5">{{ t.slug }}</div>
+                </a>
+                <div class="flex items-center gap-2">
+                  <button (click)="archiveTournament(t)"
+                    [disabled]="archivingId() === t.id"
+                    class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-400 hover:text-gray-200 rounded-lg text-xs transition-colors opacity-0 group-hover:opacity-100">
+                    {{ archivingId() === t.id ? '...' : 'Archiver' }}
+                  </button>
+                  <a [routerLink]="['/tournaments', t.slug]" class="text-gray-600 text-lg">→</a>
                 </div>
-                <span class="text-gray-600 text-lg">→</span>
-              </a>
+              </div>
             } @empty {
-              <p class="text-gray-500 text-sm">Aucun tournoi importé. Recherche-en un ci-dessus.</p>
+              <p class="text-gray-500 text-sm">Aucun tournoi actif.</p>
             }
           </div>
-        </div>
+        }
+      }
+
+      <!-- Archived tournaments -->
+      @if (activeTab() === 'archived') {
+        @if (loadingArchived()) {
+          <p class="text-gray-400">Chargement...</p>
+        } @else {
+          <div class="grid gap-3 mb-12">
+            @for (t of archivedTournaments(); track t.id) {
+              <div class="flex items-center justify-between bg-gray-900 rounded-xl p-4 border border-gray-800 group opacity-70 hover:opacity-100 transition-opacity">
+                <a [routerLink]="['/tournaments', t.slug]" class="flex-1">
+                  <div class="font-medium">{{ t.name }}</div>
+                  <div class="text-xs text-gray-500 font-mono mt-0.5">{{ t.slug }}</div>
+                </a>
+                <div class="flex items-center gap-2">
+                  <button (click)="unarchiveTournament(t)"
+                    [disabled]="archivingId() === t.id"
+                    class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-400 hover:text-gray-200 rounded-lg text-xs transition-colors opacity-0 group-hover:opacity-100">
+                    {{ archivingId() === t.id ? '...' : 'Restaurer' }}
+                  </button>
+                  <a [routerLink]="['/tournaments', t.slug]" class="text-gray-600 text-lg">→</a>
+                </div>
+              </div>
+            } @empty {
+              <p class="text-gray-500 text-sm">Aucun tournoi archivé.</p>
+            }
+          </div>
+        }
       }
 
       <!-- YouTube accounts section -->
@@ -149,6 +192,10 @@ export class TournamentsPage implements OnInit {
 
   tournaments = signal<Tournament[]>([]);
   loading = signal(true);
+  activeTab = signal<'active' | 'archived'>('active');
+  archivedTournaments = signal<Tournament[]>([]);
+  loadingArchived = signal(false);
+  archivingId = signal<string | null>(null);
 
   query = '';
   searchResults = signal<StartGGTournamentResult[]>([]);
@@ -235,6 +282,41 @@ export class TournamentsPage implements OnInit {
   importFromInput() {
     const slug = this.isUrl() ? this.extractedSlug() : this.query.trim();
     if (slug) this.importSlug(slug);
+  }
+
+  switchToArchived() {
+    this.activeTab.set('archived');
+    if (this.archivedTournaments().length === 0) {
+      this.loadingArchived.set(true);
+      this.api.getArchivedTournaments().subscribe({
+        next: (t) => { this.archivedTournaments.set(t); this.loadingArchived.set(false); },
+        error: () => this.loadingArchived.set(false),
+      });
+    }
+  }
+
+  archiveTournament(t: Tournament) {
+    this.archivingId.set(t.id);
+    this.api.archiveTournament(t.id).subscribe({
+      next: () => {
+        this.tournaments.update(list => list.filter(x => x.id !== t.id));
+        this.archivedTournaments.update(list => [t, ...list]);
+        this.archivingId.set(null);
+      },
+      error: () => this.archivingId.set(null),
+    });
+  }
+
+  unarchiveTournament(t: Tournament) {
+    this.archivingId.set(t.id);
+    this.api.unarchiveTournament(t.id).subscribe({
+      next: () => {
+        this.archivedTournaments.update(list => list.filter(x => x.id !== t.id));
+        this.tournaments.update(list => [t, ...list]);
+        this.archivingId.set(null);
+      },
+      error: () => this.archivingId.set(null),
+    });
   }
 
   importSlug(slug: string) {
