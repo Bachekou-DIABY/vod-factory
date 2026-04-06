@@ -885,11 +885,12 @@ export class VodDetailPage implements OnInit, OnDestroy {
   }
 
   toggleSelectAll() {
-    const all = this.clips().map(c => c.id);
-    if (this.selectedClipIds().size === all.length) {
-      this.selectedClipIds.set(new Set());
+    const visible = this.filteredClips().map(c => c.id);
+    const allSelected = visible.every(id => this.selectedClipIds().has(id));
+    if (allSelected) {
+      this.selectedClipIds.update(s => { const n = new Set(s); visible.forEach(id => n.delete(id)); return n; });
     } else {
-      this.selectedClipIds.set(new Set(all));
+      this.selectedClipIds.update(s => new Set([...s, ...visible]));
     }
   }
 
