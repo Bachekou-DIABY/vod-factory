@@ -418,12 +418,24 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
         <!-- Clips -->
         @if (clips().length) {
           <div id="clips-section">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-xl font-semibold">Clips ({{ clips().length }})</h2>
-              <div class="flex items-center gap-3">
-                <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
+              <h2 class="text-xl font-semibold">
+                Clips ({{ filteredClips().length }}{{ clipStatusFilter() !== 'ALL' ? '/' + clips().length : '' }})
+              </h2>
+              <div class="flex items-center gap-2 flex-wrap">
+                <!-- Status filters -->
+                @for (f of clipFilters; track f.value) {
+                  <button (click)="clipStatusFilter.set(f.value)"
+                    [class]="clipStatusFilter() === f.value
+                      ? 'px-3 py-1 rounded-lg text-xs font-medium ' + f.activeClass
+                      : 'px-3 py-1 rounded-lg text-xs font-medium bg-gray-800 text-gray-400 hover:bg-gray-700'">
+                    {{ f.label }}
+                    <span class="ml-1 opacity-70">{{ clipCount(f.value) }}</span>
+                  </button>
+                }
+                <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none ml-2">
                   <input type="checkbox"
-                    [checked]="selectedClipIds().size === clips().length && clips().length > 0"
+                    [checked]="selectedClipIds().size === filteredClips().length && filteredClips().length > 0"
                     (change)="toggleSelectAll()"
                     class="w-4 h-4 rounded accent-purple-500"
                   />
@@ -454,7 +466,7 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
             }
 
             <div class="grid gap-3">
-              @for (clip of clips(); track clip.id) {
+              @for (clip of filteredClips(); track clip.id) {
                 <div class="flex flex-col bg-gray-900 rounded-lg border transition-colors"
                   [id]="'clip-row-' + clip.id"
                   [class]="isSelected(clip.id) ? 'border-purple-600 bg-gray-800' : (expandedClipId() === clip.id ? 'border-orange-700' : 'border-gray-800')">
@@ -593,6 +605,23 @@ export class VodDetailPage implements OnInit, OnDestroy {
   sharedDescription = '';
   applyingDescription = signal(false);
   sharedDescriptionMsg = signal('');
+
+  clipStatusFilter = signal<string>('ALL');
+  filteredClips = computed(() => {
+    const f = this.clipStatusFilter();
+    return f === 'ALL' ? this.clips() : this.clips().filter(c => c.status === f);
+  });
+  readonly clipFilters = [
+    { value: 'ALL',      label: 'Tous',      activeClass: 'bg-gray-600 text-white' },
+    { value: 'PENDING',  label: 'En attente', activeClass: 'bg-yellow-800 text-yellow-200' },
+    { value: 'APPROVED', label: 'Approuvés', activeClass: 'bg-green-800 text-green-200' },
+    { value: 'UPLOADED', label: 'Uploadés',  activeClass: 'bg-red-900 text-red-200' },
+    { value: 'FAILED',   label: 'Échoués',   activeClass: 'bg-red-800 text-red-300' },
+  ];
+  clipCount(status: string) {
+    return status === 'ALL' ? this.clips().length : this.clips().filter(c => c.status === status).length;
+  }
+
   private manualDragging: 'start' | 'end' | null = null;
 
   isLocalVod(): boolean {
