@@ -36,7 +36,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
     return new Promise((resolve, reject) => {
       const args = [
         url,
-        '-f', 'bestvideo[height>=360][vcodec!=none]+bestaudio/best[height>=360][vcodec!=none]/best[vcodec!=none]',
+        '-f', 'bestvideo[height>=360][vcodec^=avc]+bestaudio[acodec^=mp4a]/bestvideo[height>=360][vcodec^=avc]+bestaudio/bestvideo[height>=360]+bestaudio/best',
         '-o', output,
         '--no-playlist',
         '--progress',
@@ -134,6 +134,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
         '--print', '%(title)s',
         '--print', '%(duration)s',
         '--print', '%(uploader)s',
+        '--print', '%(release_timestamp)s',
         '--print', '%(timestamp)s',
         '--no-warnings',
       ]);
@@ -148,13 +149,17 @@ export class YtDlpDownloadService implements IVodDownloadService {
 
       ytDlp.on('close', (code) => {
         if (code === 0) {
-          const [title, duration, uploader, timestamp] = output.trim().split('\n');
+          const [title, duration, uploader, releaseTimestamp, timestamp] = output.trim().split('\n');
+          const releaseTs = parseInt(releaseTimestamp);
           const ts = parseInt(timestamp);
+          // Prefer release_timestamp (actual stream start) over timestamp (upload date)
+          const finalTs = (isFinite(releaseTs) && releaseTs > 0) ? releaseTs
+            : (isFinite(ts) && ts > 0) ? ts : undefined;
           resolve({
             title: title || 'Unknown',
             duration: parseInt(duration) || 0,
             uploader: uploader || 'Unknown',
-            timestamp: !isNaN(ts) ? ts : undefined,
+            timestamp: finalTs,
           });
         } else {
           reject(new Error('Failed to get video info'));

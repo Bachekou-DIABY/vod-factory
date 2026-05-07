@@ -266,7 +266,7 @@ export class VodController {
       '-i', inputPath,
       '-c:v', 'copy',
       '-c:a', 'copy',
-      '-bsf:a', 'aac_adtstoasc',
+      '-movflags', '+faststart',
       '-y',
       outputPath,
     ]);
@@ -304,12 +304,21 @@ export class VodController {
     );
     if (!url) throw new BadRequestException('Fournis l\'URL du stream pour récupérer le timestamp');
     return new Promise((resolve, reject) => {
-      const proc = spawn('yt-dlp', ['--print', '%(timestamp)s', '--no-playlist', url]);
+      const proc = spawn('yt-dlp', [
+        '--print', '%(release_timestamp)s',
+        '--print', '%(timestamp)s',
+        '--no-playlist', url,
+      ]);
       let output = '';
       proc.stdout.on('data', (d: Buffer) => { output += d.toString(); });
       proc.on('close', () => {
-        const ts = parseInt(output.trim());
-        if (isFinite(ts) && ts > 0) resolve({ timestamp: ts });
+        const [releaseTimestamp, timestamp] = output.trim().split('\n');
+        const releaseTs = parseInt(releaseTimestamp);
+        const ts = parseInt(timestamp);
+        // Prefer release_timestamp (actual stream start for YouTube live) over timestamp (upload date)
+        const finalTs = (isFinite(releaseTs) && releaseTs > 0) ? releaseTs
+          : (isFinite(ts) && ts > 0) ? ts : NaN;
+        if (isFinite(finalTs) && finalTs > 0) resolve({ timestamp: finalTs });
         else reject(new BadRequestException('Impossible de récupérer le timestamp depuis l\'URL'));
       });
       proc.on('error', () => reject(new BadRequestException('yt-dlp non disponible')));
