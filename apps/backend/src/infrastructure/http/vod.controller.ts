@@ -302,18 +302,24 @@ export class VodController {
     proc.on('error', (_e: unknown) => { /* ignore */ });
   }
 
-  private runRemux(vodId: string, inputPath: string, outputPath: string) {
-    // Force .mp4 output — faststart only works on MP4, and AAC re-encode handles ADTS from .ts
+  private runRemux(vodId: string, inputPath: string, outputPath: string): void {
     const mp4Output = outputPath.replace(/\.[^.]+$/, '.mp4');
-    const proc = spawn('ffmpeg', [
+    this.runRemuxAttempt(vodId, inputPath, mp4Output, false);
+  }
+
+  private runRemuxAttempt(vodId: string, inputPath: string, mp4Output: string, forceMpegTs: boolean): void {
+    const args = [
+      ...(forceMpegTs ? ['-f', 'mpegts'] : []),
       '-i', inputPath,
       '-c:v', 'copy',
       '-c:a', 'aac',
       '-b:a', '192k',
       '-movflags', '+faststart',
-      '-y',
-      mp4Output,
-    ]);
+      '-f', 'mp4',
+      '-y', mp4Output,
+    ];
+
+    const proc = spawn('ffmpeg', args);
 
     proc.stderr.on('data', (data) => {
       this.logger.debug(`ffmpeg remux: ${data.toString().trim()}`);
@@ -324,6 +330,9 @@ export class VodController {
         try { fs.unlinkSync(inputPath); } catch (_e) { /* ignore */ }
         await this.vodRepository.update(vodId, { filePath: mp4Output, status: 'DOWNLOADED' } as any);
         this.logger.log(`✅ Remux terminé: ${path.basename(mp4Output)}`);
+      } else if (!forceMpegTs) {
+        this.logger.warn(`⚠️ Remux standard échoué (code ${code}), retry en forçant MPEG-TS...`);
+        this.runRemuxAttempt(vodId, inputPath, mp4Output, true);
       } else {
         await this.vodRepository.update(vodId, { status: 'DOWNLOADED' } as any);
         this.logger.error(`❌ Remux échoué pour VOD ${vodId} (code ${code})`);
