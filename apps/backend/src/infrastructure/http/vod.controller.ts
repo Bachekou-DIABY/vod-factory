@@ -296,10 +296,10 @@ export class VodController {
       if (isFinite(finalTs) && finalTs > 0) {
         this.vodRepository.update(vodId, { recordedAt: new Date(finalTs * 1000) } as any)
           .then(() => this.logger.log(`📅 recordedAt sauvegardé depuis URL pour VOD ${vodId}`))
-          .catch(() => {});
+          .catch((_e: unknown) => { /* ignore */ });
       }
     });
-    proc.on('error', () => {});
+    proc.on('error', (_e: unknown) => { /* ignore */ });
   }
 
   private runRemux(vodId: string, inputPath: string, outputPath: string) {
@@ -360,7 +360,7 @@ export class VodController {
         const finalTs = (isFinite(releaseTs) && releaseTs > 0) ? releaseTs
           : (isFinite(ts) && ts > 0) ? ts : NaN;
         if (isFinite(finalTs) && finalTs > 0) {
-          this.vodRepository.update(id, { recordedAt: new Date(finalTs * 1000) } as any).catch(() => {});
+          this.vodRepository.update(id, { recordedAt: new Date(finalTs * 1000) } as any).catch((_e: unknown) => { /* ignore */ });
           resolve({ timestamp: finalTs });
         } else reject(new BadRequestException('Impossible de récupérer le timestamp depuis l\'URL'));
       });
