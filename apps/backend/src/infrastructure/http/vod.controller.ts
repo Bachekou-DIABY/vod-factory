@@ -303,13 +303,16 @@ export class VodController {
   }
 
   private runRemux(vodId: string, inputPath: string, outputPath: string) {
+    // Force .mp4 output — faststart only works on MP4, and AAC re-encode handles ADTS from .ts
+    const mp4Output = outputPath.replace(/\.[^.]+$/, '.mp4');
     const proc = spawn('ffmpeg', [
       '-i', inputPath,
       '-c:v', 'copy',
-      '-c:a', 'copy',
+      '-c:a', 'aac',
+      '-b:a', '192k',
       '-movflags', '+faststart',
       '-y',
-      outputPath,
+      mp4Output,
     ]);
 
     proc.stderr.on('data', (data) => {
@@ -317,11 +320,10 @@ export class VodController {
     });
 
     proc.on('close', async (code) => {
-      if (code === 0) {
-        // Replace old file with remuxed version
-        fs.unlinkSync(inputPath);
-        await this.vodRepository.update(vodId, { filePath: outputPath, status: 'DOWNLOADED' } as any);
-        this.logger.log(`✅ Remux terminé: ${path.basename(outputPath)}`);
+      if (code === 0 && fs.existsSync(mp4Output)) {
+        try { fs.unlinkSync(inputPath); } catch (_e) { /* ignore */ }
+        await this.vodRepository.update(vodId, { filePath: mp4Output, status: 'DOWNLOADED' } as any);
+        this.logger.log(`✅ Remux terminé: ${path.basename(mp4Output)}`);
       } else {
         await this.vodRepository.update(vodId, { status: 'DOWNLOADED' } as any);
         this.logger.error(`❌ Remux échoué pour VOD ${vodId} (code ${code})`);
