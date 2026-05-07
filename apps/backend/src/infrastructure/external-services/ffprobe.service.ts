@@ -5,6 +5,7 @@ export interface ProbeResult {
   duration: number;
   resolution: string;
   fps: number;
+  recordedAt?: Date;
 }
 
 @Injectable()
@@ -23,7 +24,14 @@ export class FfprobeService {
         const duration = Math.round(metadata.format.duration || 0);
         const resolution = video ? `${video.width}x${video.height}` : '1920x1080';
         const fps = video?.r_frame_rate ? this.parseFps(video.r_frame_rate) : 30;
-        resolve({ duration, resolution, fps });
+        const tags = metadata.format.tags as Record<string, string> | undefined;
+        const creationTime = tags?.creation_time;
+        let recordedAt: Date | undefined;
+        if (creationTime) {
+          const d = new Date(creationTime);
+          if (!isNaN(d.getTime())) recordedAt = d;
+        }
+        resolve({ duration, resolution, fps, recordedAt });
       });
     });
   }

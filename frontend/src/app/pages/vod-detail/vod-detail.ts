@@ -2,7 +2,7 @@ import { Component, inject, signal, computed, OnInit, OnDestroy, ViewChild, Elem
 import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
-import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
+import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../services/api.service';
 
 @Component({
   selector: 'app-vod-detail',
@@ -337,6 +337,48 @@ import { ApiService, Vod, Clip, ClipPlan } from '../../services/api.service';
                     {{ fetchingTimestamp() ? '...' : '🔍 Auto' }}
                   </button>
                 </div>
+                <!-- Calibration depuis un set Start.gg -->
+                @if (vod()?.eventStartGGId && !importRecordedAt) {
+                  <div class="mt-2">
+                    @if (!showCalibration()) {
+                      <button (click)="loadCalibrationSets()" [disabled]="loadingCalibrationSets()"
+                        class="text-xs text-purple-400 hover:text-purple-300 underline transition-colors">
+                        {{ loadingCalibrationSets() ? 'Chargement...' : '🎯 Calibrer depuis un set Start.gg' }}
+                      </button>
+                    } @else if (loadingCalibrationSets()) {
+                      <p class="text-xs text-gray-500">Chargement des sets...</p>
+                    } @else if (calibrationSets().length) {
+                      <div class="bg-gray-800 border border-gray-700 rounded-lg p-3">
+                        <p class="text-xs text-gray-300 mb-2 leading-relaxed">
+                          1. Sélectionne un set que tu reconnais dans ta vidéo<br>
+                          2. Positionne-toi au <span class="text-white font-medium">début</span> de ce set dans le player ci-dessus<br>
+                          3. Clique "Utiliser cette position"
+                        </p>
+                        <select [(ngModel)]="selectedCalibrationSetId"
+                          class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:border-purple-500">
+                          <option value="">— Choisir un set —</option>
+                          @for (s of calibrationSets(); track s.id) {
+                            <option [value]="s.id">{{ s.phaseName ? s.phaseName + ' – ' : '' }}{{ s.roundName }} — {{ s.player1?.name }} vs {{ s.player2?.name }}</option>
+                          }
+                        </select>
+                        <div class="flex items-center gap-3">
+                          <button (click)="calibrateFromSet()" [disabled]="!selectedCalibrationSetId"
+                            class="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 disabled:opacity-40 rounded-lg text-xs font-medium transition-colors">
+                            📍 Utiliser cette position ({{ toHMS(vodCurrentTime()) }})
+                          </button>
+                          <button (click)="showCalibration.set(false)"
+                            class="text-xs text-gray-500 hover:text-gray-300 transition-colors">Annuler</button>
+                        </div>
+                      </div>
+                    } @else {
+                      <p class="text-xs text-gray-500">Aucun set avec timestamp disponible.</p>
+                    }
+                  </div>
+                }
+                @if (calibrationMsg()) {
+                  <p class="text-green-400 text-xs mt-1">{{ calibrationMsg() }}</p>
+                }
+
                 @if (isLocalVod()) {
                   <div class="mt-2">
                     <label class="block text-xs text-gray-500 mb-1">
@@ -589,6 +631,11 @@ export class VodDetailPage implements OnInit, OnDestroy {
   showImportSets = signal(false);
   importingSets = signal(false);
   importRecordedAt = 0;
+  calibrationSets = signal<StartGGSetPreview[]>([]);
+  loadingCalibrationSets = signal(false);
+  showCalibration = signal(false);
+  selectedCalibrationSetId = '';
+  calibrationMsg = signal('');
   importPreBuffer = 30;
   importPostBuffer = 30;
   importMsg = signal('');
@@ -654,6 +701,9 @@ export class VodDetailPage implements OnInit, OnDestroy {
       next: (v) => {
         this.vod.set(v);
         this.loading.set(false);
+        if (v.recordedAt) {
+          this.importRecordedAt = Math.floor(new Date(v.recordedAt).getTime() / 1000);
+        }
         this.startPollingIfNeeded(v.status, id);
       },
       error: () => this.loading.set(false),
@@ -992,6 +1042,31 @@ export class VodDetailPage implements OnInit, OnDestroy {
       next: () => this.router.navigate(['/']),
       error: (err) => alert(err?.error?.message ?? 'Erreur lors de la suppression'),
     });
+  }
+
+  loadCalibrationSets() {
+    const eventId = this.vod()?.eventStartGGId;
+    if (!eventId) return;
+    this.loadingCalibrationSets.set(true);
+    this.showCalibration.set(true);
+    this.calibrationMsg.set('');
+    this.api.getStartGGEventSets(eventId).subscribe({
+      next: ({ sets }) => {
+        this.calibrationSets.set(sets.filter(s => !!s.startTime));
+        this.loadingCalibrationSets.set(false);
+      },
+      error: () => this.loadingCalibrationSets.set(false),
+    });
+  }
+
+  calibrateFromSet() {
+    const set = this.calibrationSets().find(s => s.id === this.selectedCalibrationSetId);
+    if (!set?.startTime) return;
+    const setUnix = Math.floor(new Date(set.startTime).getTime() / 1000);
+    const videoPos = Math.floor(this.vodCurrentTime());
+    this.importRecordedAt = setUnix - videoPos;
+    this.calibrationMsg.set(`✓ Calage : stream démarré le ${new Date(this.importRecordedAt * 1000).toLocaleString('fr-FR')}`);
+    this.showCalibration.set(false);
   }
 
   importSets() {

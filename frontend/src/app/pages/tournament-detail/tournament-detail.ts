@@ -84,6 +84,17 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
                       <span class="text-sm text-gray-600">Aucun fichier sélectionné</span>
                     }
                   </div>
+                  <div class="mt-3">
+                    <label class="block text-xs text-gray-500 mb-1">
+                      URL du stream original
+                      <span class="text-gray-600 ml-1">(optionnel — Twitch ou YouTube, pour récupérer l'heure de début automatiquement)</span>
+                    </label>
+                    <input
+                      [(ngModel)]="fileSourceStreamUrl"
+                      placeholder="https://www.twitch.tv/videos/... ou YouTube"
+                      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
                   @if (uploadProgress() > 0 && uploadProgress() < 100) {
                     <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                       <div class="h-full bg-blue-500 transition-all" [style.width.%]="uploadProgress()"></div>
@@ -215,6 +226,7 @@ export class TournamentDetailPage implements OnInit {
   newVodUrl = '';
   newVodEventId = '';
   newVodStreamName = '';
+  fileSourceStreamUrl = '';
   addingVod = signal(false);
   addError = signal('');
   selectedFile = signal<File | null>(null);
@@ -311,6 +323,7 @@ export class TournamentDetailPage implements OnInit {
       tournamentId: t.id,
       eventStartGGId: this.newVodEventId || undefined,
       streamName: this.newVodStreamName || undefined,
+      sourceStreamUrl: this.fileSourceStreamUrl || undefined,
     }, (pct) => this.uploadProgress.set(pct)).subscribe({
       next: (vod) => {
         this.addingVod.set(false);

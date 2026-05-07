@@ -70,27 +70,45 @@ export class VodController {
   }))
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { tournamentId?: string; eventStartGGId?: string; streamName?: string; name?: string },
+    @Body() body: { tournamentId?: string; eventStartGGId?: string; streamName?: string; name?: string; sourceStreamUrl?: string },
   ) {
     if (!file) throw new BadRequestException('Aucun fichier vidéo fourni');
     this.logger.log(`📁 VOD uploadée: ${file.filename} (${(file.size / 1024 / 1024).toFixed(0)} MB)`);
 
     const name = body.name || path.basename(file.originalname, path.extname(file.originalname));
-    const probe = await this.ffprobe.probe(file.path).catch(() => ({ duration: 0, resolution: '1920x1080', fps: 30 }));
+    const probe = await this.ffprobe.probe(file.path).catch(() => ({ duration: 0, resolution: '1920x1080', fps: 30, recordedAt: undefined }));
 
-    return this.vodRepository.create({
+    if (probe.recordedAt) {
+      this.logger.log(`📅 recordedAt extrait du fichier: ${probe.recordedAt.toISOString()}`);
+    }
+
+    const vod = await this.vodRepository.create({
       sourceUrl: `local:${file.originalname}`,
       filePath: file.path,
       tournamentId: body.tournamentId,
       eventStartGGId: body.eventStartGGId,
       streamName: body.streamName,
       name,
-      status: 'DOWNLOADED',
+      status: 'PROCESSING',
       fileSize: file.size,
       duration: probe.duration,
       resolution: probe.resolution,
       fps: probe.fps,
+      recordedAt: probe.recordedAt,
     } as any);
+
+    // Auto-remux pour faststart (fire and forget, runRemux repassera à DOWNLOADED)
+    const ext = path.extname(file.path);
+    const base = path.basename(file.path, ext);
+    const remuxedPath = path.join(path.dirname(file.path), `${base}_fs${ext}`);
+    this.runRemux(vod.id, file.path, remuxedPath);
+
+    // Si pas de recordedAt extrait du fichier, tenter depuis l'URL source fournie
+    if (!probe.recordedAt && body.sourceStreamUrl?.trim()) {
+      this.fetchAndSaveTimestamp(vod.id, body.sourceStreamUrl.trim());
+    }
+
+    return vod;
   }
 
   @Post()
@@ -261,6 +279,29 @@ export class VodController {
     return { message: 'Remux en cours...' };
   }
 
+  private fetchAndSaveTimestamp(vodId: string, url: string): void {
+    const proc = spawn('yt-dlp', [
+      '--print', '%(release_timestamp)s',
+      '--print', '%(timestamp)s',
+      '--no-playlist', url,
+    ]);
+    let output = '';
+    proc.stdout.on('data', (d: Buffer) => { output += d.toString(); });
+    proc.on('close', () => {
+      const [releaseTimestamp, timestamp] = output.trim().split('\n');
+      const releaseTs = parseInt(releaseTimestamp);
+      const ts = parseInt(timestamp);
+      const finalTs = (isFinite(releaseTs) && releaseTs > 0) ? releaseTs
+        : (isFinite(ts) && ts > 0) ? ts : NaN;
+      if (isFinite(finalTs) && finalTs > 0) {
+        this.vodRepository.update(vodId, { recordedAt: new Date(finalTs * 1000) } as any)
+          .then(() => this.logger.log(`📅 recordedAt sauvegardé depuis URL pour VOD ${vodId}`))
+          .catch(() => {});
+      }
+    });
+    proc.on('error', () => {});
+  }
+
   private runRemux(vodId: string, inputPath: string, outputPath: string) {
     const proc = spawn('ffmpeg', [
       '-i', inputPath,
@@ -318,8 +359,10 @@ export class VodController {
         // Prefer release_timestamp (actual stream start for YouTube live) over timestamp (upload date)
         const finalTs = (isFinite(releaseTs) && releaseTs > 0) ? releaseTs
           : (isFinite(ts) && ts > 0) ? ts : NaN;
-        if (isFinite(finalTs) && finalTs > 0) resolve({ timestamp: finalTs });
-        else reject(new BadRequestException('Impossible de récupérer le timestamp depuis l\'URL'));
+        if (isFinite(finalTs) && finalTs > 0) {
+          this.vodRepository.update(id, { recordedAt: new Date(finalTs * 1000) } as any).catch(() => {});
+          resolve({ timestamp: finalTs });
+        } else reject(new BadRequestException('Impossible de récupérer le timestamp depuis l\'URL'));
       });
       proc.on('error', () => reject(new BadRequestException('yt-dlp non disponible')));
     });

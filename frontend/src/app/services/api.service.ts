@@ -23,6 +23,15 @@ export interface StartGGEvent {
   slug?: string;
 }
 
+export interface StartGGSetPreview {
+  id: string;
+  roundName?: string;
+  phaseName?: string;
+  player1: { name: string };
+  player2: { name: string };
+  startTime?: string;
+}
+
 export interface StartGGTournamentResult {
   id: string;
   name: string;
@@ -41,6 +50,7 @@ export interface Vod {
   tournamentSlug?: string;
   events?: any[];
   createdAt: string;
+  recordedAt?: string;
 }
 
 export interface Clip {
@@ -139,6 +149,10 @@ export class ApiService {
 
   getStartGGEvents(slug: string): Observable<{ tournament: any; events: StartGGEvent[] }> {
     return this.http.get<{ tournament: any; events: StartGGEvent[] }>(`${this.base}/startgg/tournaments/${slug}/events`);
+  }
+
+  getStartGGEventSets(eventId: string): Observable<{ total: number; withTimestamps: number; sets: StartGGSetPreview[] }> {
+    return this.http.get<any>(`${this.base}/startgg/events/${eventId}/sets`);
   }
 
   getTournamentVods(tournamentId: string): Observable<Vod[]> {
@@ -266,7 +280,7 @@ export class ApiService {
 
   uploadVodFile(
     file: File,
-    meta: { tournamentId?: string; eventStartGGId?: string; streamName?: string },
+    meta: { tournamentId?: string; eventStartGGId?: string; streamName?: string; sourceStreamUrl?: string },
     onProgress?: (pct: number) => void,
   ): Observable<Vod> {
     const form = new FormData();
@@ -274,6 +288,7 @@ export class ApiService {
     if (meta.tournamentId) form.append('tournamentId', meta.tournamentId);
     if (meta.eventStartGGId) form.append('eventStartGGId', meta.eventStartGGId);
     if (meta.streamName) form.append('streamName', meta.streamName);
+    if (meta.sourceStreamUrl) form.append('sourceStreamUrl', meta.sourceStreamUrl);
 
     return this.http.post<Vod>(`${this.base}/vods/upload`, form, {
       reportProgress: true,
