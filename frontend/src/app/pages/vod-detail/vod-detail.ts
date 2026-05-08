@@ -336,6 +336,16 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
                   >
                     {{ fetchingTimestamp() ? '...' : '🔍 Auto' }}
                   </button>
+                  @if (vod()?.eventStartGGId) {
+                    <button
+                      (click)="estimateFromSets()"
+                      [disabled]="estimatingTimestamp()"
+                      class="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg text-xs font-medium transition-colors shrink-0"
+                      title="Estime l'heure de début depuis le 1er set Start.gg (approximatif, ±15 min)"
+                    >
+                      {{ estimatingTimestamp() ? '...' : '⏱ Estimer' }}
+                    </button>
+                  }
                 </div>
                 <!-- Calibration depuis un set Start.gg -->
                 @if (vod()?.eventStartGGId && !importRecordedAt) {
@@ -615,6 +625,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
   retryingDownload = signal(false);
   deletingClipId = signal<string | null>(null);
   fetchingTimestamp = signal(false);
+  estimatingTimestamp = signal(false);
   timestampUrl = '';
   selectedClipIds = signal<Set<string>>(new Set());
   bulkActing = signal(false);
@@ -1003,6 +1014,27 @@ export class VodDetailPage implements OnInit, OnDestroy {
         this.fetchingTimestamp.set(false);
       },
       error: () => this.fetchingTimestamp.set(false),
+    });
+  }
+
+  estimateFromSets() {
+    const eventId = this.vod()?.eventStartGGId;
+    if (!eventId) return;
+    this.estimatingTimestamp.set(true);
+    this.api.getStartGGEventSets(eventId).subscribe({
+      next: ({ sets }) => {
+        const withTime = sets.filter(s => !!s.startTime);
+        if (!withTime.length) {
+          this.estimatingTimestamp.set(false);
+          this.calibrationMsg.set('Aucun set avec timestamp disponible.');
+          return;
+        }
+        const earliest = Math.min(...withTime.map(s => Math.floor(new Date(s.startTime!).getTime() / 1000)));
+        this.importRecordedAt = earliest - 900;
+        this.calibrationMsg.set(`⏱ Estimation : stream démarré ~15 min avant le 1er set (${new Date(this.importRecordedAt * 1000).toLocaleString('fr-FR')})`);
+        this.estimatingTimestamp.set(false);
+      },
+      error: () => this.estimatingTimestamp.set(false),
     });
   }
 
