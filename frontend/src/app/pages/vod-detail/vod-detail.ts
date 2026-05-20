@@ -104,8 +104,26 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
           </div>
         }
 
+        <!-- Conversion panel (remux in progress) -->
+        @if (v.status === 'PROCESSING' && clips().length === 0) {
+          <div class="mb-6 bg-gray-900 border border-gray-700 rounded-xl p-5 max-w-4xl">
+            <div class="flex items-center gap-3 mb-2">
+              <div class="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
+              <p class="text-sm font-medium text-gray-200">Conversion en cours...</p>
+            </div>
+            <p class="text-xs text-gray-500 leading-relaxed">
+              Ton fichier est en cours de traitement pour être lisible directement dans le navigateur.
+              C'est normal — cela peut prendre quelques minutes selon la taille de la vidéo.
+              La page se mettra à jour automatiquement une fois terminé.
+            </p>
+            <div class="mt-3 h-1 bg-gray-800 rounded-full overflow-hidden">
+              <div class="h-full bg-purple-600 rounded-full animate-pulse" style="width:100%"></div>
+            </div>
+          </div>
+        }
+
         <!-- Video player -->
-        @if (v.filePath) {
+        @if (v.filePath && !(v.status === 'PROCESSING' && clips().length === 0)) {
           <video
             #vodVideoEl
             class="w-full max-w-4xl rounded-xl mb-4 bg-black"
@@ -800,6 +818,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
       this.stopPolling();
       this.pollInterval = setInterval(() => {
         this.api.getVod(id).subscribe((v) => {
+          const prevStatus = this.vod()?.status;
           this.vod.set(v);
           if (v.status === 'DOWNLOADING') {
             this.api.getDownloadProgress(id).subscribe((p) => this.downloadProgress.set(p.progress));
@@ -810,7 +829,13 @@ export class VodDetailPage implements OnInit, OnDestroy {
           if (!['DOWNLOADING', 'PROCESSING'].includes(v.status)) {
             this.downloadProgress.set(null);
             this.stopPolling();
-            this.api.getClips(id).subscribe((c) => this.clips.set(c));
+            this.api.getClips(id).subscribe((c) => {
+              this.clips.set(c);
+              // Remux vient de se terminer → recharger la source vidéo
+              if (prevStatus === 'PROCESSING' && c.length === 0) {
+                setTimeout(() => this.vodVideoEl?.nativeElement?.load(), 500);
+              }
+            });
           }
         });
       }, 2000);
