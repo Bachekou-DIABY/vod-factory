@@ -62,9 +62,9 @@ import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api
                   [disabled]="uploadingAll()"
                   class="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                   @if (uploadingAll()) {
-                    <span>⏳</span> Upload en cours...
+                    Upload en cours...
                   } @else {
-                    ▶ Tout uploader sur YouTube
+                    Tout uploader sur YouTube
                   }
                 </button>
               </div>
@@ -155,8 +155,8 @@ import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api
                         </button>
                       } @else if (ytAuthenticated()) {
                         <button (click)="uploadOne(clip)"
-                          class="px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-xs transition-colors">
-                          ▶ Upload YT
+                          class="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs transition-colors">
+                          Uploader sur YouTube
                         </button>
                       }
 
