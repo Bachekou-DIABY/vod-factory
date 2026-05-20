@@ -222,6 +222,23 @@ export class VodController {
   async delete(@Param('id') id: string) {
     const vod = await this.vodRepository.findById(id);
     if (!vod) throw new NotFoundException(`VOD ${id} non trouvée`);
+    // Supprimer le fichier source VOD
+    if ((vod as any).filePath) {
+      const filePath = path.resolve((vod as any).filePath);
+      if (fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (_e) { /* ignore */ }
+      }
+    }
+    // Supprimer les fichiers physiques des clips
+    const clips = await this.clipRepository.findByVodId(id);
+    for (const clip of clips) {
+      if ((clip as any).filePath) {
+        const clipPath = path.resolve((clip as any).filePath);
+        if (fs.existsSync(clipPath)) {
+          try { fs.unlinkSync(clipPath); } catch (_e) { /* ignore */ }
+        }
+      }
+    }
     await this.vodRepository.delete(id);
     return { message: 'VOD supprimée' };
   }
