@@ -293,10 +293,35 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
           </div>
         }
 
+        <!-- Auto-generate banner (Twitch: timestamp auto-fetched + event linked + no clips yet) -->
+        @if (showAutoGenerateBanner()) {
+          <div class="mb-6 bg-purple-950 border border-purple-700 rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p class="text-sm font-medium text-purple-200">⚡ Timestamp détecté automatiquement</p>
+              <p class="text-xs text-purple-400 mt-0.5">Le début du stream a été récupéré depuis l'URL. Tu peux générer les clips Start.gg directement.</p>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button
+                (click)="autoGenerateClips()"
+                [disabled]="autoGenerating()"
+                class="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+              >
+                {{ autoGenerating() ? 'Génération...' : '⚡ Générer les clips' }}
+              </button>
+              <button
+                (click)="dismissAutoGenerate()"
+                class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-400 transition-colors"
+              >
+                Configurer manuellement
+              </button>
+            </div>
+          </div>
+        }
+
         <!-- Import sets button -->
         <div class="flex gap-3 mb-6 flex-wrap">
           <button
-            (click)="showImportSets.set(!showImportSets())"
+            (click)="openImportSets()"
             class="px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded-lg text-sm font-medium transition-colors"
           >
             ⚡ Importer les sets
@@ -317,94 +342,97 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
             </div>
             <div class="grid grid-cols-2 gap-3 mb-4">
               <div class="col-span-2">
-                <label class="block text-xs text-gray-400 mb-1">
-                  Heure de début du stream
-                  <span class="text-gray-600 ml-1">(optionnel — si les clips sont décalés)</span>
-                </label>
-                <div class="flex gap-2 items-center">
-                  <input
-                    type="number"
-                    [(ngModel)]="importRecordedAt"
-                    placeholder="ex: 1742654400 (laisser à 0 si inconnu)"
-                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                  />
-                  <button
-                    (click)="fetchTimestamp()"
-                    [disabled]="fetchingTimestamp() || (isLocalVod() && !timestampUrl.trim())"
-                    class="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors shrink-0"
-                    [title]="isLocalVod() && !timestampUrl.trim() ? 'Renseigne URL du stream ci-dessous' : 'Recuperer automatiquement depuis URL de la VOD'"
-                  >
-                    {{ fetchingTimestamp() ? '...' : '🔍 Auto' }}
-                  </button>
-                  @if (vod()?.eventStartGGId) {
-                    <button
-                      (click)="estimateFromSets()"
-                      [disabled]="estimatingTimestamp()"
-                      class="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg text-xs font-medium transition-colors shrink-0"
-                      title="Estime l'heure de début depuis le 1er set Start.gg (approximatif, ±15 min)"
-                    >
-                      {{ estimatingTimestamp() ? '...' : '⏱ Estimer' }}
-                    </button>
-                  }
-                </div>
-                <!-- Calibration depuis un set Start.gg -->
-                @if (vod()?.eventStartGGId && !importRecordedAt) {
-                  <div class="mt-2">
-                    @if (!showCalibration()) {
-                      <button (click)="loadCalibrationSets()" [disabled]="loadingCalibrationSets()"
-                        class="text-xs text-purple-400 hover:text-purple-300 underline transition-colors">
-                        {{ loadingCalibrationSets() ? 'Chargement...' : '🎯 Calibrer depuis un set Start.gg' }}
-                      </button>
-                    } @else if (loadingCalibrationSets()) {
-                      <p class="text-xs text-gray-500">Chargement des sets...</p>
-                    } @else if (calibrationSets().length) {
-                      <div class="bg-gray-800 border border-gray-700 rounded-lg p-3">
-                        <p class="text-xs text-gray-300 mb-2 leading-relaxed">
-                          1. Sélectionne un set que tu reconnais dans ta vidéo<br>
-                          2. Positionne-toi au <span class="text-white font-medium">début</span> de ce set dans le player ci-dessus<br>
-                          3. Clique "Utiliser cette position"
-                        </p>
-                        <select [(ngModel)]="selectedCalibrationSetId"
-                          class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:border-purple-500">
-                          <option value="">— Choisir un set —</option>
-                          @for (s of calibrationSets(); track s.id) {
-                            <option [value]="s.id">{{ s.phaseName ? s.phaseName + ' – ' : '' }}{{ s.roundName }} — {{ s.player1?.name }} vs {{ s.player2?.name }}</option>
-                          }
-                        </select>
-                        <div class="flex items-center gap-3">
+                @if (isLocalVod()) {
+                  <!-- Local VOD: calibration as primary flow -->
+                  @if (!importRecordedAt) {
+                    @if (vod()?.eventStartGGId) {
+                      <div class="bg-gray-800 border border-gray-700 rounded-lg p-3 mb-2">
+                        <p class="text-xs font-medium text-gray-200 mb-1">Calibrer depuis un set Start.gg</p>
+                        @if (loadingCalibrationSets()) {
+                          <p class="text-xs text-gray-500">Chargement des sets...</p>
+                        } @else if (calibrationSets().length) {
+                          <p class="text-xs text-gray-400 mb-2 leading-relaxed">
+                            Sets du plus ancien au plus récent. Cherche lequel tu vois au début de ta vidéo, positionne-toi dessus dans le player, puis clique "Utiliser cette position".
+                          </p>
+                          <select [(ngModel)]="selectedCalibrationSetId"
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:border-purple-500">
+                            <option value="">— Choisir un set —</option>
+                            @for (s of calibrationSets(); track s.id; let i = $index) {
+                              <option [value]="s.id">#{{ i + 1 }} · {{ s.phaseName ? s.phaseName + ' – ' : '' }}{{ s.roundName }} — {{ s.player1?.name }} vs {{ s.player2?.name }}</option>
+                            }
+                          </select>
                           <button (click)="calibrateFromSet()" [disabled]="!selectedCalibrationSetId"
                             class="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 disabled:opacity-40 rounded-lg text-xs font-medium transition-colors">
                             📍 Utiliser cette position ({{ toHMS(vodCurrentTime()) }})
                           </button>
-                          <button (click)="showCalibration.set(false)"
-                            class="text-xs text-gray-500 hover:text-gray-300 transition-colors">Annuler</button>
-                        </div>
+                        } @else {
+                          <p class="text-xs text-gray-500">Aucun set avec timestamp disponible.</p>
+                        }
                       </div>
-                    } @else {
-                      <p class="text-xs text-gray-500">Aucun set avec timestamp disponible.</p>
                     }
+                    <!-- Advanced fallback -->
+                    <div>
+                      <button (click)="showAdvancedTimestamp.set(!showAdvancedTimestamp())"
+                        class="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+                        {{ showAdvancedTimestamp() ? '▲' : '▼' }} Options avancées (URL du stream, timestamp manuel)
+                      </button>
+                      @if (showAdvancedTimestamp()) {
+                        <div class="mt-2 space-y-2">
+                          <div>
+                            <label class="block text-xs text-gray-500 mb-1">URL du stream original</label>
+                            <div class="flex gap-2">
+                              <input type="text" [(ngModel)]="timestampUrl"
+                                placeholder="https://www.twitch.tv/videos/..."
+                                class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500" />
+                              <button (click)="fetchTimestamp()" [disabled]="fetchingTimestamp() || !timestampUrl.trim()"
+                                class="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg text-xs font-medium transition-colors shrink-0">
+                                {{ fetchingTimestamp() ? '...' : '🔍 Fetch' }}
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label class="block text-xs text-gray-500 mb-1">Timestamp Unix manuel</label>
+                            <div class="flex gap-2">
+                              <input type="number" [(ngModel)]="importRecordedAt"
+                                placeholder="ex: 1742654400"
+                                class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500" />
+                              @if (vod()?.eventStartGGId) {
+                                <button (click)="estimateFromSets()" [disabled]="estimatingTimestamp()"
+                                  class="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg text-xs font-medium transition-colors shrink-0"
+                                  title="Estime depuis le 1er set Start.gg (±15 min)">
+                                  {{ estimatingTimestamp() ? '...' : '⏱ Estimer' }}
+                                </button>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <!-- Timestamp already set: show it with reset option -->
+                    <div class="flex gap-2 items-center">
+                      <span class="text-xs text-green-400 flex-1">✓ Calibré : {{ unixToLocale(importRecordedAt) }}</span>
+                      <button (click)="resetTimestamp()" class="text-xs text-gray-600 hover:text-gray-400 transition-colors shrink-0">Recalibrer</button>
+                    </div>
+                  }
+                } @else {
+                  <!-- Twitch/remote VOD: timestamp auto or manual -->
+                  <label class="block text-xs text-gray-400 mb-1">
+                    Heure de début du stream
+                    <span class="text-gray-600 ml-1">(optionnel — si les clips sont décalés)</span>
+                  </label>
+                  <div class="flex gap-2 items-center">
+                    <input type="number" [(ngModel)]="importRecordedAt"
+                      placeholder="ex: 1742654400 (laisser à 0 si inconnu)"
+                      class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500" />
+                    <button (click)="fetchTimestamp()" [disabled]="fetchingTimestamp()"
+                      class="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg text-xs font-medium transition-colors shrink-0">
+                      {{ fetchingTimestamp() ? '...' : '🔍 Auto' }}
+                    </button>
                   </div>
                 }
                 @if (calibrationMsg()) {
                   <p class="text-green-400 text-xs mt-1">{{ calibrationMsg() }}</p>
-                }
-
-                @if (isLocalVod()) {
-                  <div class="mt-2">
-                    <label class="block text-xs text-gray-500 mb-1">
-                      URL du stream original
-                      <span class="text-gray-600 ml-1">(pour récupérer le timestamp automatiquement)</span>
-                    </label>
-                    <input
-                      type="text"
-                      [(ngModel)]="timestampUrl"
-                      placeholder="https://www.twitch.tv/videos/... ou YouTube"
-                      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                    />
-                    <p class="text-xs text-gray-600 mt-1">
-                      Sans URL : renseigne le timestamp manuellement, ou utilise le recut clip par clip.
-                    </p>
-                  </div>
                 }
               </div>
               <div>
@@ -639,12 +667,24 @@ export class VodDetailPage implements OnInit, OnDestroy {
   recutMsg = signal('');
   private clipRecutDragging: 'start' | 'end' | null = null;
 
+  showAdvancedTimestamp = signal(false);
+  showAutoGenerateBannerDismissed = signal(false);
+  autoGenerating = signal(false);
+
+  showAutoGenerateBanner = computed(() => {
+    const v = this.vod();
+    if (!v || !v.recordedAt || !v.eventStartGGId) return false;
+    if (this.showAutoGenerateBannerDismissed()) return false;
+    if (this.clips().length > 0) return false;
+    if (['DOWNLOADING', 'PROCESSING', 'PENDING'].includes(v.status)) return false;
+    return true;
+  });
+
   showImportSets = signal(false);
   importingSets = signal(false);
   importRecordedAt = 0;
   calibrationSets = signal<StartGGSetPreview[]>([]);
   loadingCalibrationSets = signal(false);
-  showCalibration = signal(false);
   selectedCalibrationSetId = '';
   calibrationMsg = signal('');
   importPreBuffer = 30;
@@ -1017,6 +1057,41 @@ export class VodDetailPage implements OnInit, OnDestroy {
     });
   }
 
+  openImportSets() {
+    this.showImportSets.set(!this.showImportSets());
+    if (this.showImportSets() && this.isLocalVod() && this.vod()?.eventStartGGId && !this.importRecordedAt && !this.calibrationSets().length) {
+      this.loadCalibrationSets();
+    }
+  }
+
+  resetTimestamp() {
+    this.importRecordedAt = 0;
+    this.calibrationMsg.set('');
+    if (this.isLocalVod() && this.vod()?.eventStartGGId && !this.calibrationSets().length) {
+      this.loadCalibrationSets();
+    }
+  }
+
+  dismissAutoGenerate() {
+    this.showAutoGenerateBannerDismissed.set(true);
+    this.showImportSets.set(true);
+  }
+
+  autoGenerateClips() {
+    const v = this.vod();
+    if (!v || !v.recordedAt) return;
+    this.autoGenerating.set(true);
+    const ts = Math.floor(new Date(v.recordedAt).getTime() / 1000);
+    this.api.generateClips(v.id, { vodRecordedAtUnix: ts }).subscribe({
+      next: (res) => {
+        this.autoGenerating.set(false);
+        this.showAutoGenerateBannerDismissed.set(true);
+        setTimeout(() => this.api.getClips(v.id).subscribe((c) => this.clips.set(c)), 3000);
+      },
+      error: () => this.autoGenerating.set(false),
+    });
+  }
+
   estimateFromSets() {
     const eventId = this.vod()?.eventStartGGId;
     if (!eventId) return;
@@ -1080,11 +1155,14 @@ export class VodDetailPage implements OnInit, OnDestroy {
     const eventId = this.vod()?.eventStartGGId;
     if (!eventId) return;
     this.loadingCalibrationSets.set(true);
-    this.showCalibration.set(true);
     this.calibrationMsg.set('');
     this.api.getStartGGEventSets(eventId).subscribe({
       next: ({ sets }) => {
-        this.calibrationSets.set(sets.filter(s => !!s.startTime));
+        this.calibrationSets.set(
+          sets
+            .filter(s => !!s.startTime)
+            .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime()),
+        );
         this.loadingCalibrationSets.set(false);
       },
       error: () => this.loadingCalibrationSets.set(false),
@@ -1098,7 +1176,6 @@ export class VodDetailPage implements OnInit, OnDestroy {
     const videoPos = Math.floor(this.vodCurrentTime());
     this.importRecordedAt = setUnix - videoPos;
     this.calibrationMsg.set(`✓ Calage : stream démarré le ${new Date(this.importRecordedAt * 1000).toLocaleString('fr-FR')}`);
-    this.showCalibration.set(false);
   }
 
   importSets() {
@@ -1257,6 +1334,10 @@ export class VodDetailPage implements OnInit, OnDestroy {
   }
 
   // ─────────────────────────────────────────────────────────────────────
+
+  unixToLocale(ts: number): string {
+    return new Date(ts * 1000).toLocaleString('fr-FR');
+  }
 
   formatTime(seconds: number): string {
     const h = Math.floor(seconds / 3600);

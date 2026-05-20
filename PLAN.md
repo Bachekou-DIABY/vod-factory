@@ -7,88 +7,86 @@
 - **Stack** : Monorepo Nx, NestJS (back), Angular 21 (front), Prisma (PostgreSQL), BullMQ (Redis), FFmpeg, yt-dlp
 - **Architecture** : Clean Architecture / Hexagonale
 - **Cible** : usage interne pour TOs (Tournois Operators)
+- **Production** : `vod.bdiaby.fr` — VPS ARM, Docker Compose, HTTPS
 
 ---
 
-## Phase 1 — Socle Technique ✅
+## Ce qui a été fait
 
-- [x] Nx 22.5.4, structure `/apps`, CI/CD GitHub Actions
-- [x] NestJS + Clean Architecture (`domain/`, `application/`, `infrastructure/`)
-- [x] DIP via tokens NestJS, Mappers Prisma ↔ Domaine
-- [x] PostgreSQL via Docker, schéma `Tournament`, `Player`, `Set`, `Vod`
+### Socle technique
+- Nx 22.5.4, structure `/apps`, CI/CD GitHub Actions
+- NestJS + Clean Architecture (`domain/`, `application/`, `infrastructure/`)
+- DIP via tokens NestJS, Mappers Prisma ↔ Domaine
+- PostgreSQL via Docker, schéma `Tournament`, `Player`, `Set`, `Vod`, `Clip`, `YoutubeAccount`
 
----
+### Intégration Start.gg
+- `IStartGGService` + `StartGGService` (GraphQL via Axios)
+- `ImportTournamentUseCase` + `ImportSetsUseCase`
+- Pagination complète (> 50 sets via `paginateEventSets()`)
+- Filtres par jeux, ordonnancement par `startedAt`
 
-## Phase 2 — Intégration Start.gg ✅
+### Pipeline vidéo
+- `YtDlpDownloadService` : téléchargement yt-dlp 1080p + merge AAC 192k
+- BullMQ download queue (`VodDownloadProcessor`)
+- Import VOD locale depuis l'UI (upload fichier multipart)
+- `FfprobeService` : durée/résolution réelles après download
+- `ClipSetProcessor` : BullMQ, concurrency 4, 1 job par set
+- `GenerateClipsFromTimestampsUseCase` : timestamps Start.gg → clips
+- `-movflags +faststart` sur tous les clips
+- Détection HUD timer (% pixels blancs zone top-right, state machine)
+- Suppression fichier source VOD (`DELETE /api/vods/:id/file`)
 
-- [x] `IStartGGService` + `StartGGService` (GraphQL via Axios)
-- [x] `ImportTournamentUseCase` + `ImportSetsUseCase`
-- [x] Filtres par jeux, ordonnancement par `startedAt`
-- [x] `getStreamSetsByEventId` : pagination complète + filtre par `streamName`
+### Frontend Angular
+- Page tournois : liste, import Start.gg, ajout VOD, onglet Archives, gestion comptes YouTube
+- Page VOD : lecteur vidéo, recut inline ancré sous le player, timer hh:mm:ss pour clips manuels, description commune aux clips, filtre clips par statut, sélection respecte le filtre actif, import sets Start.gg
+- Page clip-review : lecteur clip, recut dual-handle, approbation, édition titre/round/joueurs/score, miniature custom, visibilité YouTube
+- Page "Clips approuvés" : upload batch avec création playlist (visibilité + description), upload individuel, polling statut, téléchargement
 
-⚠️ **Limitation connue** : `getSetsByEventId` paginé à 50 sets sans boucle (à corriger si event > 50 sets)
+### YouTube
+- OAuth2 Google, tokens stockés en base (`YoutubeAccount`)
+- Multi-comptes (connexion/déconnexion depuis l'UI)
+- Upload avec `videos.insert` + `thumbnails.set` + `playlistItems.insert`
+- Playlist par tournoi : création avec visibilité + description avant le batch upload, réutilisation si existante
+- Fix race condition playlist (re-fetch tournoi avant création)
 
----
-
-## Phase 3 — Video Management ✅
-
-- [x] `YtDlpDownloadService` : téléchargement yt-dlp 1080p + merge AAC 192k
-- [x] `AddVodToTournamentUseCase`, `GetTournamentVodsUseCase`
-- [x] `VodController` : `POST /api/vods`, `GET /api/vods/:id`, streaming HTTP Range
-- [x] Fix Windows : spawn direct ffmpeg pour extraction frames (`%05d` incompatible fluent-ffmpeg)
-
-⚠️ **Limitation connue** : durée/résolution hardcodées (ffprobe non intégré)
-
----
-
-## Phase 4 — Détection & Clipping Automatique ✅
-
-### Détection HUD timer (remplacement OCR Tesseract)
-- [x] Détection par % pixels blancs zone top-right (HUD timer SSBU)
-- [x] State machine : `timerVisibleThreshold=3%`, `minGameDuration=90s`, `cooldown=25s`, `consecutiveAbsent≥3`
-- [x] Validé sur 2 VODs : 9/9 games (2 BO5) + 3/3 games (3-0)
-
-### Multi-set clipping + workers parallèles
-- [x] `Clip` model Prisma + `ClipRepository` + `GET /api/vods/:id/clips`
-- [x] `ClipSetProcessor` : WorkerHost BullMQ, concurrency 4, 1 job par set
-- [x] `GenerateClipsFromTimestampsUseCase` : timestamps Start.gg → clips directs (sans détection)
-- [x] Events JSON persistés sur `Vod` (évite re-analyse au clipping)
-- [x] `-movflags +faststart` sur tous les clips générés (streaming navigateur immédiat)
+### Archivage
+- Champ `archivedAt` sur `Tournament`
+- Endpoints `PATCH /archive` et `PATCH /unarchive`
+- Onglet "Archives" sur la page tournois
 
 ---
 
-## Phase 5 — Frontend Angular + Upload YouTube ✅
+## Reste à faire
 
-### Interface Angular 21
-- [x] Page tournois : liste, import Start.gg, ajout VOD
-- [x] Page VOD : lecteur vidéo, gestion téléchargement/analyse/clipping, nommage inline, remux faststart
-- [x] Page clip-review : lecteur clip, recut dual-handle, approbation, édition titre/round/players/score
-- [x] Thumbnail custom uploadable par clip
-- [x] Page "Clips approuvés" par tournoi : liste avec statut upload YouTube
-- [x] Navigation cohérente : retour tournoi depuis vod-detail, retour vod (section clips) depuis clip-review
+### Priorité haute
+- **Authentification** : login/mot de passe pour protéger l'accès à vod.bdiaby.fr avant ouverture à des TOs
+  - À définir : liste de tournois commune ou par utilisateur ?
+- **Sélecteur de chaîne YouTube** : si plusieurs comptes connectés, permettre de choisir sur quelle chaîne uploader (actuellement prend toujours le premier compte)
+- **Skip playlist form si playlist existante** : si `tournament.youtubePlaylistId` est déjà défini, ne pas proposer le formulaire de création et uploader directement
 
-### Upload YouTube
-- [x] OAuth2 Google (flux installed app, redirect `localhost:3000/api/youtube/callback`)
-- [x] `YouTubeService` : `getAuthUrl()`, `handleCallback()`, `uploadVideo()` + thumbnail auto
-- [x] Upload en arrière-plan avec statut `UPLOADING → UPLOADED / FAILED` en base
-- [x] `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` dans `.env`
-- [x] Tokens OAuth sauvegardés localement (`storage/youtube-tokens.json`, ignoré git)
+### Priorité moyenne
+- **Réordonnancement des clips** : drag-and-drop ou flèches haut/bas, mise à jour de `setOrder` en base
+- **Fix bad gateway** à l'import VOD (URL ou fichier local) — instable en prod
+- **Fix refresh obligatoire** après ajout tournoi / import VOD (pas de mise à jour réactive)
 
-### Qualité / UX
-- [x] Suppression fiable ancien clip + thumbnail après recut (`path.resolve()` sur Windows)
-- [x] Suppression spam "Request aborted" dans les logs
-- [x] Boutons "📍 → Début" / "📍 → Fin" dans vod-detail et clip-review
-- [x] Prisma : `recordedAt`, `thumbnailPath`, `VOD.name` (migrations appliquées)
+### Priorité basse
+- **Purge manuelle** des VODs et clips (bouton avec confirmation, pas d'auto-delete)
+- **Améliorer le référencement YouTube** : tags automatiques (ex: "SSBU Tournament"), description type par défaut
+- **Usage en live** : yt-dlp supporte `--live-from-start`, mais c'est un mode de fonctionnement à part entière
+- **Supprimer le bouton "Corriger le format"** : l'auto-remux à l'upload devrait rendre ce bouton inutile à terme. Le retirer une fois qu'on a confiance que tous les formats sont bien gérés (MP4 faststart systématique, fallback MPEG-TS). Garder uniquement pour les VODs importées avant ce fix.
+
+### UX streamlinée (import VOD + génération clips)
+- **VOD depuis URL Twitch** : le timestamp est récupéré automatiquement en arrière-plan → afficher un bandeau "Timestamp détecté, voulez-vous générer les clips ?" dès que la VOD est téléchargée, avec deux options : générer auto ou configurer manuellement. ✅ Bandeau implémenté.
+- **VOD depuis upload local (sans URL)** : interface de calibration guidée — afficher les premiers sets Start.gg (triés par `startedAt` ascending), l'utilisateur cherche lequel correspond au début de sa vidéo, se positionne dessus, confirme. ✅ Calibration par set implémentée, sets maintenant triés chronologiquement.
 
 ---
 
-## Reste à faire (backlog)
+## Pistes explorées, non retenues
 
-- [x] Pagination Start.gg > 50 sets par event (déjà géré via `paginateEventSets()`)
-- [x] `ffprobe` pour durée/résolution réelles — `FfprobeService` appelé après download et après upload fichier
-- [x] Option suppression VOD source après génération clips — `DELETE /api/vods/:id/file` + bouton dans l'UI
-- [x] BullMQ download — `VodDownloadProcessor` sur queue `vod-download`, remplace le fire-and-forget
-- [x] Support VODs locales : import fichier depuis interface (copie vers `storage/vods/`)
+- **Selenium / Playwright pour l'upload YouTube** : envisagé pour contourner les quotas API. Abandonné au profit de l'API officielle (googleapis) pour fiabilité et maintenabilité.
+- **OCR Tesseract pour la détection de jeu** : trop lent et peu fiable sur des frames SSBU. Remplacé par la détection HUD timer (analyse % pixels blancs).
+- **Association YouTube par tournoi** : chaque tournoi pouvait avoir sa propre chaîne YouTube associée. Sur-ingénierie pour le cas d'usage actuel — simplifié à "premier compte disponible".
+- **Multi-utilisateurs avec chaîne YouTube par utilisateur** : envisagé avec un champ `youtubeAccountId` sur `Tournament`. Mis de côté en attendant l'implémentation de l'auth.
 
 ---
 
@@ -114,34 +112,6 @@
 
 **23-24/03/2026** : Angular frontend complet, clip-review UI, streaming vidéo, YouTube OAuth upload, remux faststart, thumbnail custom, fix recut Windows
 
-**24/03/2026** : Backlog terminé — ffprobe (durée/résolution réelles), BullMQ download queue, suppression fichier source VOD, import VOD local depuis UI
+**24/03/2026** : Backlog terminé — ffprobe, BullMQ download queue, suppression fichier source VOD, import VOD local
 
-J'ai reussi a deployer le https et j'ai du modifier cette ligne dans le prisma.schema pcq c une archi arm jsp quoi
-"  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]"
-Il faudrait qu'on puisse supprimer les clips depuis l'interface de gestion des clips dans une vod ( par ex la j'ai 3 sets auto générés qui font 5 sec donc ils sont inexploitables mais je dois aller sur chaque sets un par un pr les delete)
-
-Il faudrait que l'utilisateur n'ait pas a rentrer la commande pr le timestamp unix a la main
-Quitte a lui demander l'url de la vod -> executer la requete depuis un bouton -> envoyer la data au back
-
-Il faudrait etre plus explicite " page tournoi " = a quoi elle sert ? -> récuperer les informations ( sets / evenements / etc ) du tournoi dont on souhaite découper les vods
-"page import vod" -> Dans l'onglet d'Import des vods, il faut expliquer pourquoi importer les vods et que dans le cas ou l'import se fait depuis les fichiers locaux, il faudra synchroniser l'heure ou le stream s'est deroulé avec les timings du tournoi 
-Expliquer aussi que renseigner le nom de la vod et l'event permet de regrouper les vods en fonction de ces criteres 
-eventuellement pouvoir supprimer les vods directement depuis cet ecran aussi  
-
-J'ai des bad geteway par ci par la ( quand j'importe une vod que ce soit depuis l'url ou les fichiers locaux )
-Le bug du slider est a fix aussi sur l'interface de gestion des clips la ou y'a la vod entiere
-
-![alt text](image.png) y'a marqué tournoi ajouté mais j'dois refresh pour pouvoir cliquer sur le tournoi
-
-![alt text](image-1.png) j'ai importé une vod par l'url mais j'dois refresh pr voir la vod et surtout je sais meme pas si elle se dl vraiment pcq y'a une 502 
-
-Rajouter la possibilité de copier la meme description pour tout les clips d'une vod genre par ex a coté de la vod ou on peut faire des clips manuellement
-Pouvoir créer des clips manuel avec un timer format hh:mm:sec ( pareil que pr les clips dans l'interface de clip specifique)
-comme ça on peut rajouter de quoi améliorer le referenceemnt ( et rajouter SSBU Tournament dans la vod aide aussi)
-
-Qu'est-ce qui se passe si on veut utiliser l'outil en plein live (ca peut etre interessant pr realiser des live tweet)
-
-Ca me genere une playlist par dl pas une playlist par tournoi
-Et faudrait p't'etre envisager un delete auto des vods et clips au bout de 48h sinon on sera full space
-Ou en tt cas un moyen de limiter l'espace que peut prendre un utilisateur de la plateforme
-ET du mettre en place l'auth et qu'un utilisateur puisse upload au choix ses vods sur la chaine yt qu'il veut auquel il se sera connecté
+**02-14/04/2026** : YouTube multi-comptes (tokens en DB), recut inline ancré sous le player VOD, inputs hh:mm:ss pour clips manuels, description commune aux clips, filtre/sélection clips par statut, playlist YouTube avec visibilité + description, fix race condition playlist, archivage des tournois (onglet Archives)
