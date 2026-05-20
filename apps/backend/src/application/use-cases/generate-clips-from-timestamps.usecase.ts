@@ -90,16 +90,16 @@ export class GenerateClipsFromTimestampsUseCase {
 
     this.logger.log(`🎬 Génération clips VOD ${vodId} — ${sets.length} sets, recordedAt: ${new Date(recordedAtUnix * 1000).toISOString()}${vodEndUnix ? `, fin: ${new Date(vodEndUnix * 1000).toISOString()}` : ''}`);
 
-    let enqueuedSets = 0;
+    // Pass 1: build the list of jobs to enqueue (determines correct totalSets)
+    type PendingJob = ClipSetJobData & { title?: string; roundName?: string; players?: string; score?: string };
+    const pendingJobs: PendingJob[] = [];
     let skippedSets = 0;
 
     for (let i = 0; i < sets.length; i++) {
       const set = sets[i];
       const setOrder = i + 1;
-
       const isLastSet = i === sets.length - 1;
 
-      // Last set without endTime → use VOD end instead of skipping
       if (!set.startTime || (!set.endTime && !(isLastSet && vodDurationSeconds > 0))) {
         this.logger.warn(`⚠️ Set ${setOrder} (${set.roundName}) sans timestamps — ignoré`);
         skippedSets++;
@@ -108,7 +108,6 @@ export class GenerateClipsFromTimestampsUseCase {
 
       const setStartUnix = Math.floor(new Date(set.startTime!).getTime() / 1000);
 
-      // Skip sets that start after the VOD ends (belong to another day/stream)
       if (vodEndUnix && setStartUnix > vodEndUnix) {
         this.logger.warn(`⚠️ Set ${setOrder} (${set.roundName}) commence après la fin de la VOD — ignoré`);
         skippedSets++;
@@ -117,7 +116,6 @@ export class GenerateClipsFromTimestampsUseCase {
 
       const startSeconds = Math.max(0, setStartUnix - recordedAtUnix - preBufferSeconds);
 
-      // If no endTime on last set → extend to end of VOD to capture the full game
       let endSeconds: number;
       if (!set.endTime && isLastSet && vodDurationSeconds > 0) {
         endSeconds = vodDurationSeconds;
@@ -138,7 +136,7 @@ export class GenerateClipsFromTimestampsUseCase {
       const safeRound = (set.roundName ?? `set_${setOrder}`).replace(/[^a-zA-Z0-9_-]/g, '_');
       const outputPath = path.join(this.storageDir, `${vodId}_set${setOrder}_${safeRound}.mp4`);
 
-      const jobData: ClipSetJobData & { title?: string; roundName?: string; players?: string; score?: string } = {
+      pendingJobs.push({
         vodId,
         setOrder,
         setStartGGId: set.id,
@@ -146,19 +144,25 @@ export class GenerateClipsFromTimestampsUseCase {
         outputPath,
         startSeconds,
         endSeconds,
-        totalSets: sets.length - skippedSets,
+        totalSets: 0, // filled in pass 2
         title: `${set.phaseName ? `${set.phaseName} - ` : ''}${set.roundName} — ${players}`,
         roundName: set.phaseName ? `${set.phaseName} - ${set.roundName}` : set.roundName,
         players,
         score: set.score,
-      };
+      });
+    }
 
+    // Pass 2: enqueue with the correct totalSets now that we know the final count
+    const totalSets = pendingJobs.length;
+    let enqueuedSets = 0;
+
+    for (const jobData of pendingJobs) {
+      jobData.totalSets = totalSets;
       await this.queue.add(CLIP_SET_JOB, jobData, {
         attempts: 2,
         backoff: { type: 'fixed', delay: 5000 },
       });
-
-      this.logger.log(`✅ Set ${setOrder} enqueued: [${startSeconds}s → ${endSeconds}s] — ${players}`);
+      this.logger.log(`✅ Set ${jobData.setOrder} enqueued: [${jobData.startSeconds}s → ${jobData.endSeconds}s] — ${jobData.players}`);
       enqueuedSets++;
     }
 
