@@ -39,7 +39,7 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
               }
             </div>
             <span class="inline-block px-3 py-1 rounded-full text-xs font-medium"
-              [class]="statusClass(v.status)">{{ statusLabel(v.status) }}</span>
+              [class]="statusClass(v.status)">{{ vodLabel(v.status) }}</span>
           </div>
           <div class="flex gap-2 shrink-0 ml-4">
             @if (v.filePath) {
@@ -797,11 +797,15 @@ export class VodDetailPage implements OnInit, OnDestroy {
 
   private startPollingIfNeeded(status: string, id: string) {
     if (['DOWNLOADING', 'PROCESSING'].includes(status)) {
+      this.stopPolling();
       this.pollInterval = setInterval(() => {
         this.api.getVod(id).subscribe((v) => {
           this.vod.set(v);
           if (v.status === 'DOWNLOADING') {
             this.api.getDownloadProgress(id).subscribe((p) => this.downloadProgress.set(p.progress));
+          }
+          if (v.status === 'PROCESSING') {
+            this.api.getClips(id).subscribe((c) => this.clips.set(c));
           }
           if (!['DOWNLOADING', 'PROCESSING'].includes(v.status)) {
             this.downloadProgress.set(null);
@@ -1083,10 +1087,11 @@ export class VodDetailPage implements OnInit, OnDestroy {
     this.autoGenerating.set(true);
     const ts = Math.floor(new Date(v.recordedAt).getTime() / 1000);
     this.api.generateClips(v.id, { vodRecordedAtUnix: ts }).subscribe({
-      next: (res) => {
+      next: () => {
         this.autoGenerating.set(false);
         this.showAutoGenerateBannerDismissed.set(true);
-        setTimeout(() => this.api.getClips(v.id).subscribe((c) => this.clips.set(c)), 3000);
+        this.vod.set({ ...v, status: 'PROCESSING' });
+        this.startPollingIfNeeded('PROCESSING', v.id);
       },
       error: () => this.autoGenerating.set(false),
     });
@@ -1193,7 +1198,8 @@ export class VodDetailPage implements OnInit, OnDestroy {
         this.importSuccess.set(true);
         this.importMsg.set('✓ ' + (res.enqueuedSets ?? 0) + ' clips en file');
         this.showImportSets.set(false);
-        setTimeout(() => this.api.getClips(v.id).subscribe((c) => this.clips.set(c)), 3000);
+        this.vod.set({ ...v, status: 'PROCESSING' });
+        this.startPollingIfNeeded('PROCESSING', v.id);
       },
       error: (err) => {
         this.importingSets.set(false);
@@ -1349,6 +1355,11 @@ export class VodDetailPage implements OnInit, OnDestroy {
 
   formatDuration(start: number, end: number): string {
     return Math.round((end - start) / 60) + ' min';
+  }
+
+  vodLabel(status: string): string {
+    if (status === 'PROCESSING' && this.clips().length > 0) return 'Génération des clips en cours...';
+    return this.statusLabel(status);
   }
 
   statusLabel(status: string): string {
