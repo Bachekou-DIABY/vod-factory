@@ -108,6 +108,9 @@ model Vod {
   events         Json?     // Array of GameScreenEvent détectés (final, après merge)
   totalChunks    Int?      // Nombre de chunks d'analyse
   completedChunks Int?     @default(0)
+  alignment        Json?   // AlignmentReport : sets Start.gg alignés sur les games détectées
+  hudSignal        Bytes?  // Signal HUD quantifié, pour rejouer la segmentation sans redécoder
+  signalSampleRate Int?    // Échantillons par seconde du signal stocké
   metadata       Json?     // Additional metadata (stream info, etc.)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

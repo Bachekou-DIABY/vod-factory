@@ -27,6 +27,12 @@ export interface Vod {
   endTime?: number;
   recordedAt?: Date;
   events?: Record<string, any>[];
+  /** Rapport d'alignement sets Start.gg ↔ games détectées (AlignmentReport). */
+  alignment?: Record<string, any>;
+  /** Signal HUD quantifié, pour rejouer la segmentation sans redécoder la VOD. */
+  hudSignal?: Buffer;
+  /** Échantillons par seconde du signal stocké. */
+  signalSampleRate?: number;
   metadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;

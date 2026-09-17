@@ -42,7 +42,14 @@ import { AnalyzeChunkProcessor } from '../infrastructure/queues/analyze-chunk.pr
 import { VodDownloadProcessor } from '../infrastructure/queues/vod-download.processor';
 import { DownloadProgressService } from '../infrastructure/queues/download-progress.service';
 import { FfprobeService } from '../infrastructure/external-services/ffprobe.service';
-import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE, VOD_DOWNLOAD_QUEUE } from '../infrastructure/queues/queue.constants';
+import { FrameSignalService } from '../infrastructure/external-services/frame-signal.service';
+import { TimerOcrValidatorService } from '../infrastructure/external-services/timer-ocr-validator.service';
+import { SignalStore } from '../infrastructure/persistence/signal.store';
+import { AlignVodSetsUseCase } from '../application/use-cases/align-vod-sets.usecase';
+import { GenerateClipsFromAlignmentUseCase } from '../application/use-cases/generate-clips-from-alignment.usecase';
+import { AlignVodProcessor } from '../infrastructure/queues/align-vod.processor';
+import { VodAlignmentController } from '../infrastructure/http/vod-alignment.controller';
+import { VOD_PROCESSING_QUEUE, CLIP_SET_QUEUE, VOD_DOWNLOAD_QUEUE, VOD_ALIGN_QUEUE } from '../infrastructure/queues/queue.constants';
 export { VOD_PROCESSING_QUEUE };
 
 
@@ -61,8 +68,9 @@ export { VOD_PROCESSING_QUEUE };
     BullModule.registerQueue({ name: VOD_PROCESSING_QUEUE }),
     BullModule.registerQueue({ name: CLIP_SET_QUEUE }),
     BullModule.registerQueue({ name: VOD_DOWNLOAD_QUEUE }),
+    BullModule.registerQueue({ name: VOD_ALIGN_QUEUE }),
   ],
-  controllers: [AppController, TournamentController, VodController, TournamentVodsController, TournamentSetsController, ListTournamentsController, ClipController, StartGGController, YouTubeController],
+  controllers: [AppController, TournamentController, VodController, VodAlignmentController, TournamentVodsController, TournamentSetsController, ListTournamentsController, ClipController, StartGGController, YouTubeController],
   providers: [
     AppService, 
     PrismaService,
@@ -119,6 +127,13 @@ export { VOD_PROCESSING_QUEUE };
     DownloadProgressService,
     FfprobeService,
     YouTubeService,
+    // Pipeline d'alignement set Start.gg ↔ games détectées
+    FrameSignalService,
+    TimerOcrValidatorService,
+    SignalStore,
+    AlignVodSetsUseCase,
+    GenerateClipsFromAlignmentUseCase,
+    AlignVodProcessor,
   ],
 })
 export class AppModule {}

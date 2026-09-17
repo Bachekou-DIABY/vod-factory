@@ -1,0 +1,241 @@
+import { ExpectedSet, GameCandidate } from '../../domain/alignment/alignment.types';
+import { AlignerOptions, DEFAULT_ALIGNER_OPTIONS, alignSets } from './set-aligner';
+import { estimateGameCount } from './score-parser';
+import { estimateBias } from './offset-estimator';
+import { DEFAULT_SEGMENTER_OPTIONS, segment } from './segmenter';
+
+const RECORDED_AT = 1_700_000_000;
+
+function options(overrides: Partial<AlignerOptions> = {}): AlignerOptions {
+  return {
+    ...DEFAULT_ALIGNER_OPTIONS,
+    biasSeconds: 0,
+    recordedAtUnix: RECORDED_AT,
+    vodDurationSeconds: 20_000,
+    ...overrides,
+  };
+}
+
+function makeSet(
+  index: number,
+  gameCount: number | null,
+  startOffset: number,
+  endOffset: number,
+): ExpectedSet {
+  return {
+    setStartGGId: `set-${index}`,
+    roundName: `Round ${index}`,
+    players: `A${index} vs B${index}`,
+    score: gameCount === null ? undefined : `A${index} ${gameCount} - 0 B${index}`,
+    apiStartUnix: RECORDED_AT + startOffset,
+    apiEndUnix: RECORDED_AT + endOffset,
+    gameCount,
+    minGames: gameCount ?? 2,
+    maxGames: gameCount ?? 5,
+  };
+}
+
+function makeGames(starts: number[], duration = 200): GameCandidate[] {
+  return starts.map((start) => ({
+    startSeconds: start,
+    endSeconds: start + duration,
+    confidence: 0.9,
+    snappedToBlack: true,
+    ocrConfirmed: null,
+  }));
+}
+
+describe('estimateGameCount', () => {
+  it('déduit le nombre de games depuis un displayScore complet', () => {
+    expect(estimateGameCount('Seidokan 3 - 1 Ironsup', 5).gameCount).toBe(4);
+    expect(estimateGameCount('Acola 2 - 0 Sparg0', 3).gameCount).toBe(2);
+  });
+
+  it('ignore les chiffres présents dans les pseudos', () => {
+    expect(estimateGameCount('Player1 3 - 1 Player2', 5).gameCount).toBe(4);
+    expect(estimateGameCount('Sam 2 0 - 2 Bob', 3).gameCount).toBe(2);
+  });
+
+  it('traite les DQ et scores négatifs comme zéro game jouée', () => {
+    expect(estimateGameCount('DQ', 3).gameCount).toBe(0);
+    expect(estimateGameCount('Tag -1 - 0 Autre', 3).gameCount).toBe(0);
+  });
+
+  it('retombe sur les bornes du best-of quand le score est absent', () => {
+    const estimate = estimateGameCount(null, 5);
+    expect(estimate.gameCount).toBeNull();
+    expect(estimate.minGames).toBe(3);
+    expect(estimate.maxGames).toBe(5);
+  });
+});
+
+describe('alignSets', () => {
+  it('attribue à chaque set le nombre de games annoncé par son score', () => {
+    const sets = [makeSet(1, 2, 100, 700), makeSet(2, 3, 900, 1700)];
+    // 2 games pour le set 1, 3 pour le set 2.
+    const candidates = makeGames([120, 400, 950, 1250, 1550]);
+
+    const aligned = alignSets(sets, candidates, options());
+
+    expect(aligned[0].games.map((g) => g.startSeconds)).toEqual([120, 400]);
+    expect(aligned[1].games.map((g) => g.startSeconds)).toEqual([950, 1250, 1550]);
+    expect(aligned.every((a) => a.source === 'video')).toBe(true);
+  });
+
+  it('écarte un faux positif intercalé plutôt que de fausser le comptage', () => {
+    const sets = [makeSet(1, 2, 100, 700), makeSet(2, 2, 2000, 2600)];
+    // La game à 1200s ne colle ni au set 1 ni au set 2 : bracket ou caméra plateau.
+    const candidates = makeGames([120, 400, 1200, 2050, 2350]);
+
+    const aligned = alignSets(sets, candidates, options());
+
+    expect(aligned[0].games.map((g) => g.startSeconds)).toEqual([120, 400]);
+    expect(aligned[1].games.map((g) => g.startSeconds)).toEqual([2050, 2350]);
+  });
+
+  it('signale un set partiel quand il manque une game', () => {
+    const sets = [makeSet(1, 3, 100, 900)];
+    const candidates = makeGames([120, 400]);
+
+    const aligned = alignSets(sets, candidates, options());
+
+    expect(aligned[0].source).toBe('video-partial');
+    expect(aligned[0].warnings[0]).toContain('3 game(s)');
+    expect(aligned[0].confidence).toBeLessThan(1);
+  });
+
+  it('replie sur les timestamps API quand aucune game ne correspond', () => {
+    const sets = [makeSet(1, 2, 100, 700), makeSet(2, 2, 9000, 9600)];
+    const candidates = makeGames([120, 400]);
+
+    const aligned = alignSets(sets, candidates, options());
+
+    expect(aligned[1].source).toBe('api');
+    expect(aligned[1].games).toHaveLength(0);
+    // preRoll 25s appliqué au temps API converti.
+    expect(aligned[1].startSeconds).toBe(9000 - DEFAULT_ALIGNER_OPTIONS.preRollSeconds);
+    expect(aligned[1].endSeconds).toBe(9600 + DEFAULT_ALIGNER_OPTIONS.postRollSeconds);
+  });
+
+  it('ne cherche aucune game pour un set gagné par forfait', () => {
+    const sets = [makeSet(1, 0, 100, 200), makeSet(2, 2, 400, 1000)];
+    const candidates = makeGames([420, 700]);
+
+    const aligned = alignSets(sets, candidates, options());
+
+    expect(aligned[0].games).toHaveLength(0);
+    expect(aligned[0].warnings[0]).toContain('forfait');
+    expect(aligned[1].games).toHaveLength(2);
+  });
+
+  it('applique le biais estimé aux temps API', () => {
+    // Les temps API sont tous en avance de 300s sur la réalité vidéo.
+    const sets = [makeSet(1, 2, 100, 700)];
+    const candidates = makeGames([400, 680]);
+
+    const withoutBias = alignSets(sets, candidates, options());
+    const withBias = alignSets(sets, candidates, options({ biasSeconds: 300 }));
+
+    expect(withBias[0].confidence).toBeGreaterThan(withoutBias[0].confidence);
+  });
+
+  it('garde les sets dans l\'ordre chronologique du stream', () => {
+    const sets = [
+      makeSet(1, 2, 100, 700),
+      makeSet(2, 2, 1000, 1600),
+      makeSet(3, 2, 2000, 2600),
+    ];
+    const candidates = makeGames([120, 400, 1050, 1350, 2050, 2350]);
+
+    const aligned = alignSets(sets, candidates, options());
+
+    const starts = aligned.map((a) => a.startSeconds);
+    expect(starts).toEqual([...starts].sort((a, b) => a - b));
+    expect(aligned.every((a) => a.games.length === 2)).toBe(true);
+  });
+});
+
+describe('estimateBias', () => {
+  it('retrouve un décalage systématique des timestamps Start.gg', () => {
+    const trueOffset = -240; // le TO lance ses sets 4 minutes trop tard
+    const sets = [
+      makeSet(1, 2, 1000, 1600),
+      makeSet(2, 2, 3000, 3600),
+      makeSet(3, 2, 5000, 5600),
+      makeSet(4, 2, 7000, 7600),
+    ];
+    const candidates: GameCandidate[] = sets.map((s) => ({
+      startSeconds: s.apiStartUnix! - RECORDED_AT + trueOffset,
+      endSeconds: s.apiEndUnix! - RECORDED_AT + trueOffset,
+      confidence: 0.9,
+      snappedToBlack: true,
+      ocrConfirmed: null,
+    }));
+
+    const estimate = estimateBias(candidates, sets, RECORDED_AT, 10_000);
+
+    expect(estimate.biasSeconds).toBe(trueOffset);
+    expect(estimate.confidence).toBeGreaterThan(0.5);
+    expect(estimate.setsUsed).toBe(4);
+  });
+
+  it('renvoie un biais nul quand trop peu de sets ont des timestamps', () => {
+    const sets = [makeSet(1, 2, 1000, 1600)];
+    const estimate = estimateBias(makeGames([1000]), sets, RECORDED_AT, 10_000);
+
+    expect(estimate.biasSeconds).toBe(0);
+    expect(estimate.confidence).toBe(0);
+  });
+});
+
+describe('segment', () => {
+  /** Construit un signal synthétique : HUD haut pendant les games, noir aux transitions. */
+  function buildSignal(games: Array<{ from: number; to: number }>, length: number) {
+    const hud = new Uint8Array(length);
+    const dark = new Uint8Array(length);
+    for (const game of games) {
+      for (let t = game.from; t < game.to; t++) hud[t] = 40; // ~0.157
+      // Fondu au noir de 3s juste avant le HUD.
+      for (let t = game.from - 3; t < game.from; t++) if (t >= 0) dark[t] = 250;
+    }
+    return { sampleRate: 1, startSeconds: 0, hud, dark };
+  }
+
+  it('extrait un intervalle par game et recale le début sur le fondu au noir', () => {
+    const signal = buildSignal(
+      [
+        { from: 100, to: 300 },
+        { from: 500, to: 750 },
+      ],
+      1000,
+    );
+
+    const candidates = segment(signal, DEFAULT_SEGMENTER_OPTIONS);
+
+    expect(candidates).toHaveLength(2);
+    expect(candidates[0].startSeconds).toBe(97);
+    expect(candidates[0].snappedToBlack).toBe(true);
+    expect(candidates[1].startSeconds).toBe(497);
+  });
+
+  it('fusionne un kill screen court au lieu de couper la game en deux', () => {
+    const signal = buildSignal(
+      [
+        { from: 100, to: 200 },
+        { from: 205, to: 320 },
+      ],
+      1000,
+    );
+
+    const candidates = segment(signal, DEFAULT_SEGMENTER_OPTIONS);
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].endSeconds).toBeGreaterThanOrEqual(319);
+  });
+
+  it('rejette les intervalles trop courts pour être une game', () => {
+    const signal = buildSignal([{ from: 100, to: 120 }], 1000);
+
+    expect(segment(signal, DEFAULT_SEGMENTER_OPTIONS)).toHaveLength(0);
+  });
+});
