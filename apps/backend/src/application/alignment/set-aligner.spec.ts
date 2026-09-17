@@ -3,6 +3,7 @@ import { AlignerOptions, DEFAULT_ALIGNER_OPTIONS, alignSets } from './set-aligne
 import { estimateGameCount } from './score-parser';
 import { estimateBias } from './offset-estimator';
 import { DEFAULT_SEGMENTER_OPTIONS, segment } from './segmenter';
+import { filterSetsToVodWindow } from './vod-window';
 
 const RECORDED_AT = 1_700_000_000;
 
@@ -237,5 +238,64 @@ describe('segment', () => {
     const signal = buildSignal([{ from: 100, to: 120 }], 1000);
 
     expect(segment(signal, DEFAULT_SEGMENTER_OPTIONS)).toHaveLength(0);
+  });
+});
+
+describe('filterSetsToVodWindow', () => {
+  // VOD de 2h démarrée à RECORDED_AT.
+  const DUREE = 7200;
+
+  it('garde les sets qui tombent dans la fenêtre de la VOD', () => {
+    const sets = [
+      makeSet(1, 2, 600, 1200),
+      makeSet(2, 2, 3000, 3600),
+      makeSet(3, 2, 6000, 6600),
+    ];
+
+    const { kept, dropped } = filterSetsToVodWindow(sets, RECORDED_AT, DUREE);
+
+    expect(kept).toHaveLength(3);
+    expect(dropped).toHaveLength(0);
+  });
+
+  it('écarte les sets appartenant à une autre partie du stream', () => {
+    const sets = [
+      // Partie 1, terminée bien avant le début de cette VOD.
+      makeSet(1, 2, -20000, -19000),
+      makeSet(2, 2, 600, 1200),
+      // Partie 3, largement après la fin.
+      makeSet(3, 2, 30000, 31000),
+    ];
+
+    const { kept, dropped } = filterSetsToVodWindow(sets, RECORDED_AT, DUREE);
+
+    expect(kept.map((s) => s.setStartGGId)).toEqual(['set-2']);
+    expect(dropped.map((s) => s.setStartGGId)).toEqual(['set-1', 'set-3']);
+  });
+
+  it('tolère un set légèrement hors fenêtre, que le biais ramènera dedans', () => {
+    // Commence 10 min avant le début de la VOD : dans la marge de 20 min.
+    const sets = [makeSet(1, 2, -600, 300)];
+
+    const { kept } = filterSetsToVodWindow(sets, RECORDED_AT, DUREE);
+
+    expect(kept).toHaveLength(1);
+  });
+
+  it('conserve les sets sans aucun timestamp', () => {
+    const sans = { ...makeSet(1, 2, 600, 1200), apiStartUnix: undefined, apiEndUnix: undefined };
+
+    const { kept } = filterSetsToVodWindow([sans], RECORDED_AT, DUREE);
+
+    expect(kept).toHaveLength(1);
+  });
+
+  it('ne filtre rien quand la durée de la VOD est inconnue', () => {
+    const sets = [makeSet(1, 2, -20000, -19000), makeSet(2, 2, 30000, 31000)];
+
+    const { kept, dropped } = filterSetsToVodWindow(sets, RECORDED_AT, 0);
+
+    expect(kept).toHaveLength(2);
+    expect(dropped).toHaveLength(0);
   });
 });

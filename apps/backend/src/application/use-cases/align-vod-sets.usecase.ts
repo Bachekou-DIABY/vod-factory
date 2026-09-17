@@ -33,6 +33,7 @@ import {
   segment,
 } from '../alignment/segmenter';
 import { OffsetEstimate, estimateBias } from '../alignment/offset-estimator';
+import { filterSetsToVodWindow } from '../alignment/vod-window';
 import {
   AlignerOptions,
   DEFAULT_ALIGNER_OPTIONS,
@@ -104,12 +105,40 @@ export class AlignVodSetsUseCase {
       );
     }
 
-    const sets = await this.loadExpectedSets(
+    // Mémorise le calage fourni, comme le fait la génération par timestamps :
+    // sans ça, un calage manuel serait à refournir à chaque appel.
+    if (input.vodRecordedAtUnix !== undefined) {
+      await this.vodRepository.update(input.vodId, {
+        recordedAt: new Date(input.vodRecordedAtUnix * 1000),
+      });
+    }
+
+    const onStreamSets = await this.loadExpectedSets(
       eventStartGGId,
       input.streamName ?? vod.streamName,
     );
+
+    // Un stream découpé en plusieurs VODs renvoie quand même tous ses sets :
+    // on ne garde que ceux que cette partie peut contenir.
+    const { kept: sets, dropped } = filterSetsToVodWindow(
+      onStreamSets,
+      recordedAtUnix,
+      durationSeconds,
+    );
+    if (dropped.length > 0) {
+      this.logger.log(
+        `✂️ ${dropped.length} set(s) hors de la fenêtre de la VOD, écartés avant alignement`,
+      );
+    }
+    if (sets.length === 0) {
+      throw new BadRequestException(
+        `Aucun des ${onStreamSets.length} sets on-stream ne tombe dans la fenêtre de cette VOD. ` +
+          `Vérifiez recordedAt (${new Date(recordedAtUnix * 1000).toISOString()}) et la durée (${durationSeconds}s).`,
+      );
+    }
+
     this.logger.log(
-      `🎯 Alignement VOD ${input.vodId} — ${sets.length} sets on-stream, durée ${durationSeconds}s`,
+      `🎯 Alignement VOD ${input.vodId} — ${sets.length} sets retenus sur ${onStreamSets.length} on-stream, durée ${durationSeconds}s`,
     );
 
     await this.vodRepository.update(input.vodId, { status: VodStatus.PROCESSING });
