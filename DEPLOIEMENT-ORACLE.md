@@ -18,42 +18,6 @@ docker compose -f docker-compose.production.yml --env-file .env.production ps
 ./deploy.sh              # redémarre sans reconstruire
 ./deploy.sh --build      # reconstruit les images, ~20 min sur 2 cœurs ARM
 ```
-
-| Élément | Valeur |
-|---|---|
-| Instance | `vod-factory`, VM.Standard.A1.Flex, 2 OCPU / 12 Go |
-| IP publique | `130.110.250.226`, **réservée** |
-| Boot volume | 150 Go |
-| Domaine | `vod.bdiaby.fr`, HTTPS actif |
-| Utilisateur SSH | `ubuntu` |
-| Espace disque | 145 Go utilisables, 8 % occupés |
-| Mémoire | 11 Go, 1 Go utilisé au repos |
-
-Le script `scripts/oci-launch-retry.sh` n'a plus lieu d'être lancé. Il reste
-utile si l'instance devait être recréée un jour.
-
----
-
-## État de l'installation
-
-| Élément | État |
-|---|---|
-| OCI CLI 3.92.1 dans `~/.oci-cli-venv` | fait |
-| Config `~/.oci/config`, région `eu-marseille-1` | fait |
-| Clé API non chiffrée, empreinte `4f:30:1a:a0:6b:44:6f:6f:18:31:05:2a:2b:12:9b:d1` | fait |
-| Clé publique déclarée dans la console | fait |
-| Boot volume orphelin de mars supprimé | fait |
-| Compte passé en Pay As You Go | fait |
-| Budget 5 € avec alertes Actual 20 % et Forecast 100 % | fait |
-| Instance A1 créée | fait |
-| IP publique réservée et assignée | fait |
-| DNS `vod.bdiaby.fr` vers l'IP réservée | fait |
-| Ports 80 et 443 ouverts, VCN et iptables | fait |
-| Docker installé | fait |
-| Certificat Let's Encrypt émis, expire le 16/12/2026 | fait |
-| Stack déployée et joignable en HTTPS | fait |
-| Hook de renouvellement du certificat | fait, validé en `--dry-run` |
-| URL de redirection OAuth déclarée chez Google | fait |
 | Connexion YouTube testée en production | fait, chaîne « Bachekou DIABY » |
 | FFmpeg 8.0.1 et yt-dlp validés en aarch64 | fait |
 | Pipeline d'alignement poussé et déployé | **à faire** |
@@ -189,7 +153,43 @@ Sur l'image Ubuntu 24.04 aarch64 de septembre 2026, le REJECT est en position 5 
 
 ```bash
 sudo iptables -I INPUT 5 -m state --state NEW -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT 5 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo iptables -I INPUT 5 -m state --state NEW -p tcp --dport 44
+
+| Élément | Valeur |
+|---|---|
+| Instance | `vod-factory`, VM.Standard.A1.Flex, 2 OCPU / 12 Go |
+| IP publique | `130.110.250.226`, **réservée** |
+| Boot volume | 150 Go |
+| Domaine | `vod.bdiaby.fr`, HTTPS actif |
+| Utilisateur SSH | `ubuntu` |
+| Espace disque | 145 Go utilisables, 8 % occupés |
+| Mémoire | 11 Go, 1 Go utilisé au repos |
+
+Le script `scripts/oci-launch-retry.sh` n'a plus lieu d'être lancé. Il reste
+utile si l'instance devait être recréée un jour.
+
+---
+
+## État de l'installation
+
+| Élément | État |
+|---|---|
+| OCI CLI 3.92.1 dans `~/.oci-cli-venv` | fait |
+| Config `~/.oci/config`, région `eu-marseille-1` | fait |
+| Clé API non chiffrée, empreinte `4f:30:1a:a0:6b:44:6f:6f:18:31:05:2a:2b:12:9b:d1` | fait |
+| Clé publique déclarée dans la console | fait |
+| Boot volume orphelin de mars supprimé | fait |
+| Compte passé en Pay As You Go | fait |
+| Budget 5 € avec alertes Actual 20 % et Forecast 100 % | fait |
+| Instance A1 créée | fait |
+| IP publique réservée et assignée | fait |
+| DNS `vod.bdiaby.fr` vers l'IP réservée | fait |
+| Ports 80 et 443 ouverts, VCN et iptables | fait |
+| Docker installé | fait |
+| Certificat Let's Encrypt émis, expire le 16/12/2026 | fait |
+| Stack déployée et joignable en HTTPS | fait |
+| Hook de renouvellement du certificat | fait, validé en `--dry-run` |
+| URL de redirection OAuth déclarée chez Google | fait |3 -j ACCEPT
 sudo iptables -L INPUT -n --line-numbers      # REJECT doit être en dernier
 ```
 
@@ -328,3 +328,77 @@ $ad = ((& $oci iam availability-domain list --compartment-id $t | ConvertFrom-Js
   Where-Object { $_.'lifecycle-state' -ne 'TERMINATED' } |
   ForEach-Object { "{0,-34} {1,5} Go" -f $_.'display-name', $_.'size-in-gbs' }
 ```
+
+---
+
+## Reprise : session du 18 septembre
+
+Le déploiement est terminé et validé. Cette section couvre le travail en cours
+sur la détection.
+
+### Ce qui est prouvé
+
+Première analyse réelle lancée sur un extrait de 30 minutes du top 8 SSBU de
+l'Ultimate Fighting Arena 2026, stream `Etoiles`, event `1619466`.
+
+| Mesure | Résultat |
+|---|---|
+| Durée de l'analyse | 30 s pour 30 min de vidéo |
+| Sets écartés hors fenêtre | 18 sur 20 |
+| Games détectées | 3, pour un set annoncé 3-0 |
+| Écart au timestamp Start.gg | 18 s |
+
+**La détection du HUD fonctionne sur cet overlay.** Les trois games trouvées à
+845, 1138 et 1393 secondes, de 3 à 4 minutes chacune, séparées de 70 à 90
+secondes. Le second set, qui commence après la fin du fichier, a été
+correctement signalé en repli plutôt que découpé n'importe comment.
+
+### À faire au retour, dans l'ordre
+
+1. **Pousser** le travail en cours, puis sur le serveur
+   `git pull && ./deploy.sh --build`.
+2. **Relancer l'analyse** sur la même VOD et vérifier que le rapport affiche
+   bien « games attendues 3 » et une confiance supérieure à 0,83. C'est la
+   preuve que la correction du parseur de score est effective.
+
+```bash
+curl -X POST https://vod.bdiaby.fr/api/vods/<id>/align -H 'Content-Type: application/json' -d '{}'
+curl -s https://vod.bdiaby.fr/api/vods/<id>/alignment
+```
+
+3. **Tester sur la VOD complète** de trois heures, qui contient une vingtaine de
+   sets. C'est le premier test où l'alignement aura vraiment quelque chose à
+   aligner, et où l'estimation du biais pourra fonctionner : elle exige au moins
+   trois sets horodatés et n'en avait que deux.
+4. **Construire l'interface** de l'alignement une fois la détection jugée
+   fiable : bouton d'analyse, progression, tableau des sets avec confiance et
+   avertissements avant génération des clips.
+
+### Corrections apportées, non déployées
+
+- **Parseur de score.** Le format réel est `Nom1 3 - Nom2 0`, le second score en
+  fin de chaîne. Le parseur attendait `3 - 0` collé au tiret et ne reconnaissait
+  donc jamais rien. La contrainte du nombre de games, cœur de l'alignement, ne
+  s'appliquait pas. Tests écrits sur de vrais scores du tournoi.
+- **Noms de stream.** Comparaison tolérante aux espaces et à la casse, aux deux
+  endroits où elle se fait, et nettoyage à la saisie. Un `'Etoiles '` renvoyait
+  zéro set sans message.
+- **Téléchargement.** Huit fragments en parallèle, réglable par
+  `YT_DLP_CONCURRENT_FRAGMENTS`. Contourne le bridage par connexion des
+  plateformes.
+- **Calibrage.** Disponible pour toute VOD liée à un event, plus seulement les
+  fichiers locaux, avec bouton de recalibrage.
+- **Liste de calibrage.** Limitée aux sets passés à l'antenne et groupée par
+  phase. Sur UFA, on passe de près de mille sets à une cinquantaine.
+- **Sélecteur d'épreuve.** Groupé par jeu, avec la journée dans le libellé.
+
+### Limites connues du téléchargement
+
+YouTube et Twitch refusent tous deux les adresses de datacenter d'Oracle Cloud :
+`Sign in to confirm you're not a bot` côté YouTube. Le contournement par cookies
+est déconseillé, yt-dlp documente que le compte Google associé se fait
+fréquemment signaler, et c'est le même compte que celui de l'upload.
+
+Le flux qui marche, et qui est de toute façon le vrai flux produit : le TO
+fournit son enregistrement, ou on télécharge depuis un poste en connexion
+résidentielle, puis on passe par l'upload de fichier.

@@ -50,15 +50,26 @@ export class StartGGController {
     return { tournament, events };
   }
 
-  /** Récupère tous les sets d'un event avec leurs timestamps */
+  /**
+   * Récupère les sets d'un event avec leurs timestamps.
+   *
+   * `onStreamOnly` est indispensable pour le calibrage : une affiche comme UFA
+   * compte près de mille sets, dont seule une cinquantaine est passée à
+   * l'antenne. Renvoyer le reste rendrait la liste inutilisable.
+   */
   @Get('events/:eventId/sets')
   async getSets(
     @Param('eventId') eventId: string,
     @Query('streamName') streamName?: string,
+    @Query('onStreamOnly') onStreamOnly?: string,
   ) {
-    const sets = await this.startGGService.getAllSetsByEventId(eventId, streamName);
-    const withTimestamps = sets.filter((s) => s.startTime && s.endTime).length;
-    return { total: sets.length, withTimestamps, sets };
+    const sets = await this.startGGService.getAllSetsByEventId(
+      eventId,
+      streamName?.trim() || undefined,
+    );
+    const filtered = onStreamOnly === 'true' ? sets.filter((s) => s.stream) : sets;
+    const withTimestamps = filtered.filter((s) => s.startTime && s.endTime).length;
+    return { total: filtered.length, withTimestamps, sets: filtered };
   }
 
   /** Génère les clips d'une VOD depuis les timestamps Start.gg */

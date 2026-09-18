@@ -9,6 +9,16 @@ import {
   DownloadResult,
 } from '../../domain/interfaces/vod-download-service.interface';
 
+/**
+ * Nombre de fragments téléchargés en parallèle.
+ *
+ * Twitch et YouTube brident chaque connexion à peu près à la vitesse de
+ * lecture. Sur un flux unique, une VOD de huit heures met huit heures à
+ * descendre. Le téléchargement par fragments parallèles contourne ce bridage,
+ * et coûte peu en CPU puisqu'il est limité par le réseau.
+ */
+const CONCURRENT_FRAGMENTS = Number(process.env.YT_DLP_CONCURRENT_FRAGMENTS) || 8;
+
 @Injectable()
 export class YtDlpDownloadService implements IVodDownloadService {
   private readonly logger = new Logger(YtDlpDownloadService.name);
@@ -42,7 +52,7 @@ export class YtDlpDownloadService implements IVodDownloadService {
         '--progress',
         '--newline',
         '--no-warnings',
-        '--no-call-home',
+        '--concurrent-fragments', String(CONCURRENT_FRAGMENTS),
         '--ffmpeg-location', 'ffmpeg',
         '--remux-video', 'mp4',
       ];

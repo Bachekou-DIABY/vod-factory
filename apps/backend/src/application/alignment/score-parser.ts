@@ -23,8 +23,16 @@ interface ParsedScore {
 }
 
 /**
- * Start.gg renvoie `displayScore` sous la forme "Tag A 3 - 1 Tag B", ou "DQ",
- * ou null quand le set n'a pas été reporté. Un score négatif encode un forfait.
+ * Start.gg renvoie `displayScore` sous la forme "Nom1 3 - Nom2 0" : le second
+ * score se trouve à la toute fin, après le nom du second joueur, et non collé
+ * au tiret comme on pourrait le croire.
+ *
+ * Les pseudos contiennent fréquemment chiffres et séparateurs, par exemple
+ * "DLT/CS3 | MKBigBoss", donc les deux nombres sont ancrés : le premier précède
+ * immédiatement le tiret, le second termine la chaîne et suit une espace. Sans
+ * cet ancrage, le "2" de "Player2" passerait pour un score.
+ *
+ * "DQ" et les scores négatifs encodent un forfait.
  */
 function parseDisplayScore(displayScore?: string | null): ParsedScore | null {
   if (!displayScore) return null;
@@ -34,11 +42,23 @@ function parseDisplayScore(displayScore?: string | null): ParsedScore | null {
   if (/^dq$/i.test(raw)) return { a: 0, b: 0, forfeit: true };
 
   // Tirets ASCII, demi-cadratin et cadratin : les overlays des TOs varient.
-  const match = raw.match(/(-?\d+)\s*[-–—]\s*(-?\d+)/);
-  if (!match) return null;
+  const leading = raw.match(/(?:^|\s)(-?\d+)\s*[-–—]\s/);
+  const trailing = raw.match(/\s(-?\d+)\s*$/);
 
-  const a = parseInt(match[1], 10);
-  const b = parseInt(match[2], 10);
+  let a: number;
+  let b: number;
+
+  if (leading && trailing) {
+    a = parseInt(leading[1], 10);
+    b = parseInt(trailing[1], 10);
+  } else {
+    // Repli sur la forme compacte "3 - 1", sans nom autour.
+    const compact = raw.match(/(-?\d+)\s*[-–—]\s*(-?\d+)/);
+    if (!compact) return null;
+    a = parseInt(compact[1], 10);
+    b = parseInt(compact[2], 10);
+  }
+
   if (!isFinite(a) || !isFinite(b)) return null;
   if (a < 0 || b < 0) return { a: 0, b: 0, forfeit: true };
 

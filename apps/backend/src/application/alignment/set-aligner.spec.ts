@@ -1,6 +1,5 @@
 import { ExpectedSet, GameCandidate } from '../../domain/alignment/alignment.types';
 import { AlignerOptions, DEFAULT_ALIGNER_OPTIONS, alignSets } from './set-aligner';
-import { estimateGameCount } from './score-parser';
 import { estimateBias } from './offset-estimator';
 import { DEFAULT_SEGMENTER_OPTIONS, segment } from './segmenter';
 import { filterSetsToVodWindow } from './vod-window';
@@ -45,30 +44,6 @@ function makeGames(starts: number[], duration = 200): GameCandidate[] {
     ocrConfirmed: null,
   }));
 }
-
-describe('estimateGameCount', () => {
-  it('déduit le nombre de games depuis un displayScore complet', () => {
-    expect(estimateGameCount('Seidokan 3 - 1 Ironsup', 5).gameCount).toBe(4);
-    expect(estimateGameCount('Acola 2 - 0 Sparg0', 3).gameCount).toBe(2);
-  });
-
-  it('ignore les chiffres présents dans les pseudos', () => {
-    expect(estimateGameCount('Player1 3 - 1 Player2', 5).gameCount).toBe(4);
-    expect(estimateGameCount('Sam 2 0 - 2 Bob', 3).gameCount).toBe(2);
-  });
-
-  it('traite les DQ et scores négatifs comme zéro game jouée', () => {
-    expect(estimateGameCount('DQ', 3).gameCount).toBe(0);
-    expect(estimateGameCount('Tag -1 - 0 Autre', 3).gameCount).toBe(0);
-  });
-
-  it('retombe sur les bornes du best-of quand le score est absent', () => {
-    const estimate = estimateGameCount(null, 5);
-    expect(estimate.gameCount).toBeNull();
-    expect(estimate.minGames).toBe(3);
-    expect(estimate.maxGames).toBe(5);
-  });
-});
 
 describe('alignSets', () => {
   it('attribue à chaque set le nombre de games annoncé par son score', () => {

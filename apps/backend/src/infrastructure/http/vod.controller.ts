@@ -75,6 +75,11 @@ export class VodController {
     if (!file) throw new BadRequestException('Aucun fichier vidéo fourni');
     this.logger.log(`📁 VOD uploadée: ${file.filename} (${(file.size / 1024 / 1024).toFixed(0)} MB)`);
 
+    // Champs saisis à la main : un espace parasite ferait échouer le filtrage
+    // des sets par nom de stream, sans message explicite.
+    const streamName = body.streamName?.trim() || undefined;
+    const eventStartGGId = body.eventStartGGId?.trim() || undefined;
+
     const name = body.name || path.basename(file.originalname, path.extname(file.originalname));
     const probe = await this.ffprobe.probe(file.path).catch(() => ({ duration: 0, resolution: '1920x1080', fps: 30, recordedAt: undefined }));
 
@@ -86,8 +91,8 @@ export class VodController {
       sourceUrl: `local:${file.originalname}`,
       filePath: file.path,
       tournamentId: body.tournamentId,
-      eventStartGGId: body.eventStartGGId,
-      streamName: body.streamName,
+      eventStartGGId,
+      streamName,
       name,
       status: 'PROCESSING',
       fileSize: file.size,

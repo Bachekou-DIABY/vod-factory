@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpEventType } from '@angular/common/http';
+import { HttpClient, HttpEventType, HttpParams } from '@angular/common/http';
 import { Observable, map, filter, of, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
 
@@ -21,6 +21,10 @@ export interface StartGGEvent {
   id: string;
   name: string;
   slug?: string;
+  /** Jeu de l'épreuve, pour regrouper une affiche multi-jeux comme UFA. */
+  videogameName?: string;
+  /** Début de l'épreuve, ISO. Permet de regrouper par journée. */
+  startAt?: string;
 }
 
 export interface StartGGSetPreview {
@@ -151,8 +155,14 @@ export class ApiService {
     return this.http.get<{ tournament: any; events: StartGGEvent[] }>(`${this.base}/startgg/tournaments/${slug}/events`);
   }
 
-  getStartGGEventSets(eventId: string): Observable<{ total: number; withTimestamps: number; sets: StartGGSetPreview[] }> {
-    return this.http.get<any>(`${this.base}/startgg/events/${eventId}/sets`);
+  getStartGGEventSets(
+    eventId: string,
+    opts: { streamName?: string; onStreamOnly?: boolean } = {},
+  ): Observable<{ total: number; withTimestamps: number; sets: StartGGSetPreview[] }> {
+    let params = new HttpParams();
+    if (opts.streamName) params = params.set('streamName', opts.streamName);
+    if (opts.onStreamOnly) params = params.set('onStreamOnly', 'true');
+    return this.http.get<any>(`${this.base}/startgg/events/${eventId}/sets`, { params });
   }
 
   getTournamentVods(tournamentId: string): Observable<Vod[]> {

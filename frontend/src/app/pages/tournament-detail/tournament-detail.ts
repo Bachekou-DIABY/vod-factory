@@ -115,8 +115,12 @@ import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.se
                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                     >
                       <option value="">— Aucun event —</option>
-                      @for (ev of events(); track ev.id) {
-                        <option [value]="ev.id">{{ ev.name }}</option>
+                      @for (groupe of eventsParJeu(); track groupe.jeu) {
+                        <optgroup [label]="groupe.jeu">
+                          @for (ev of groupe.events; track ev.id) {
+                            <option [value]="ev.id">{{ ev.name }}{{ ev.jour ? ' · ' + ev.jour : '' }}</option>
+                          }
+                        </optgroup>
                       }
                     </select>
                   } @else {
@@ -276,6 +280,41 @@ export class TournamentDetailPage implements OnInit {
       error: () => this.loading.set(false),
     });
   }
+
+  /**
+   * Regroupe les épreuves par jeu, comme le fait Start.gg. Une affiche multi-jeux
+   * en compte facilement quarante, illisibles dans une liste plate. Le jour est
+   * ajouté au libellé pour distinguer les épreuves d'un même jeu réparties sur
+   * plusieurs journées.
+   */
+  eventsParJeu = computed(() => {
+    const groupes = new Map<string, Array<StartGGEvent & { jour?: string }>>();
+
+    for (const ev of this.events()) {
+      const jeu = ev.videogameName?.trim() || 'Autres';
+      const jour = ev.startAt
+        ? new Date(ev.startAt).toLocaleDateString('fr-FR', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+          })
+        : undefined;
+      if (!groupes.has(jeu)) groupes.set(jeu, []);
+      groupes.get(jeu)!.push({ ...ev, jour });
+    }
+
+    for (const liste of groupes.values()) {
+      liste.sort((a, b) => {
+        const da = a.startAt ? Date.parse(a.startAt) : Number.MAX_SAFE_INTEGER;
+        const db = b.startAt ? Date.parse(b.startAt) : Number.MAX_SAFE_INTEGER;
+        return da !== db ? da - db : a.name.localeCompare(b.name);
+      });
+    }
+
+    return [...groupes.entries()]
+      .map(([jeu, events]) => ({ jeu, events }))
+      .sort((a, b) => a.jeu.localeCompare(b.jeu));
+  });
 
   private loadEvents() {
     this.loadingEvents.set(true);

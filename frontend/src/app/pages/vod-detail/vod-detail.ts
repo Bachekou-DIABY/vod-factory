@@ -373,8 +373,12 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
                         <select [(ngModel)]="selectedCalibrationSetId"
                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:border-purple-500">
                           <option value="">— Choisir un set —</option>
-                          @for (s of calibrationSets(); track s.id; let i = $index) {
-                            <option [value]="s.id">#{{ i + 1 }} · {{ s.phaseName ? s.phaseName + ' – ' : '' }}{{ s.roundName }} — {{ s.player1?.name }} vs {{ s.player2?.name }}</option>
+                          @for (phase of calibrationSetsParPhase(); track phase.nom) {
+                            <optgroup [label]="phase.nom">
+                              @for (s of phase.sets; track s.id) {
+                                <option [value]="s.id">{{ s.heure }} · {{ s.roundName }} — {{ s.player1?.name }} vs {{ s.player2?.name }}</option>
+                              }
+                            </optgroup>
                           }
                         </select>
                         <button (click)="calibrateFromSet()" [disabled]="!selectedCalibrationSetId"
@@ -1170,12 +1174,39 @@ export class VodDetailPage implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Regroupe les sets de calibrage par phase du tournoi, et affiche l'heure
+   * Start.gg de chacun pour aider à retrouver celui qu'on voit à l'écran.
+   */
+  calibrationSetsParPhase = computed(() => {
+    const groupes = new Map<string, Array<StartGGSetPreview & { heure: string }>>();
+
+    for (const s of this.calibrationSets()) {
+      const nom = s.phaseName?.trim() || 'Sans phase';
+      const heure = s.startTime
+        ? new Date(s.startTime).toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '--:--';
+      if (!groupes.has(nom)) groupes.set(nom, []);
+      groupes.get(nom)!.push({ ...s, heure });
+    }
+
+    return [...groupes.entries()].map(([nom, sets]) => ({ nom, sets }));
+  });
+
   loadCalibrationSets() {
     const eventId = this.vod()?.eventStartGGId;
     if (!eventId) return;
     this.loadingCalibrationSets.set(true);
     this.calibrationMsg.set('');
-    this.api.getStartGGEventSets(eventId).subscribe({
+    // Seuls les sets passés à l'antenne peuvent servir de repère visuel. Sur une
+    // affiche comme UFA, ça fait passer la liste de près de mille à cinquante.
+    this.api.getStartGGEventSets(eventId, {
+      onStreamOnly: true,
+      streamName: this.vod()?.streamName?.trim() || undefined,
+    }).subscribe({
       next: ({ sets }) => {
         this.calibrationSets.set(
           sets

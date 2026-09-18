@@ -62,3 +62,9 @@ context.md
 .angular
 
 __screenshots__/
+
+# VODs de test telechargees a la racine, plusieurs centaines de Mo
+*.mp4
+*.mkv
+*.webm
+*.part

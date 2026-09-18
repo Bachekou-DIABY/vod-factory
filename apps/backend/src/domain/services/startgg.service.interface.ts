@@ -29,6 +29,10 @@ export interface StartGGSetResponse {
 export interface StartGGEventResponse {
   id: string;
   name: string;
+  /** Jeu de l'épreuve, pour regrouper une affiche multi-jeux. */
+  videogameName?: string;
+  /** Début de l'épreuve, ISO. Permet de regrouper par journée. */
+  startAt?: string;
 }
 
 export interface StartGGTournamentSearchResult {

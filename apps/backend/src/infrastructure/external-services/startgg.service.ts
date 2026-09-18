@@ -125,7 +125,7 @@ export class StartGGService implements IStartGGService {
     const query = gql`
       query GetTournamentEventsOnly($id: ID!) {
         tournament(id: $id) {
-          events { id name }
+          events { id name startAt videogame { name } }
         }
       }
     `;
@@ -135,9 +135,11 @@ export class StartGGService implements IStartGGService {
         { query: print(query), variables: { id: startGGTournamentId } },
         { headers: { Authorization: `Bearer ${this.apiToken}` } }
       );
-      return (response.data?.data?.tournament?.events || []).map((e: StartGGEvent) => ({
+      return (response.data?.data?.tournament?.events || []).map((e: any) => ({
         id: e.id.toString(),
         name: e.name,
+        videogameName: e.videogame?.name,
+        startAt: e.startAt ? new Date(e.startAt * 1000).toISOString() : undefined,
       }));
     } catch (error) {
       this.logger.error(`Error fetching events: ${error.message}`);
@@ -219,7 +221,9 @@ export class StartGGService implements IStartGGService {
           s.slots?.length === 2 &&
           s.slots[0].entrant &&
           s.slots[1].entrant &&
-          (!streamName || s.stream.streamName.toLowerCase() === streamName.toLowerCase())
+          (!streamName ||
+            s.stream.streamName.trim().toLowerCase() ===
+              streamName.trim().toLowerCase())
       );
 
       filtered.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
@@ -272,9 +276,13 @@ export class StartGGService implements IStartGGService {
       }
     } while (page <= totalPages);
 
+    // Le nom de stream est saisi à la main : on tolère espaces et casse des
+    // deux côtés, sinon un " Etoiles " ne correspond à rien et l'appelant
+    // reçoit zéro set sans savoir pourquoi.
+    const wanted = streamName?.trim().toLowerCase();
     const valid = allSets.filter(
       (s) => s.slots?.length === 2 && s.slots[0].entrant && s.slots[1].entrant &&
-        (!streamName || s.stream?.streamName?.toLowerCase() === streamName.toLowerCase()),
+        (!wanted || s.stream?.streamName?.trim().toLowerCase() === wanted),
     );
     valid.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
     return valid.map((s) => ({
