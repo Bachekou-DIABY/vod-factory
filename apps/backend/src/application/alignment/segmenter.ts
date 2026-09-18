@@ -34,8 +34,19 @@ export interface SegmenterOptions {
    * avant de fusionner supprime le problème à la racine.
    */
   minFragmentSeconds: number;
-  /** Ratio de pixels sombres à partir duquel une frame est un fondu au noir. */
-  darkThreshold: number;
+  /**
+   * Ratio de pixels sombres à partir duquel une frame est un fondu au noir.
+   *
+   * `'auto'` déduit le seuil du signal lui-même. C'est le mode par défaut, car
+   * la profondeur des fondus dépend entièrement de l'habillage : un cadre qui
+   * reste allumé pendant la transition plafonne la noirceur bien en dessous
+   * d'un seuil fixe. Mesuré à 0,95 sur l'habillage d'UFA, à 0,51 seulement sur
+   * celui de VGBootCamp, où un seuil fixe à 0,90 ne déclenchait jamais.
+   */
+  darkThreshold: number | 'auto';
+  /** Bornes du seuil adaptatif, pour qu'il reste plausible sur un signal atypique. */
+  darkThresholdMin: number;
+  darkThresholdMax: number;
   /** Fenêtre de recherche du fondu au noir précédant un début de game. */
   blackLookbackSeconds: number;
   /** Fenêtre de recherche du fondu au noir suivant une fin de game. */
@@ -49,7 +60,9 @@ export const DEFAULT_SEGMENTER_OPTIONS: SegmenterOptions = {
   minGameSeconds: 45,
   mergeGapSeconds: 12,
   minFragmentSeconds: 15,
-  darkThreshold: 0.9,
+  darkThreshold: 'auto',
+  darkThresholdMin: 0.2,
+  darkThresholdMax: 0.9,
   blackLookbackSeconds: 40,
   blackLookaheadSeconds: 10,
 };
@@ -82,6 +95,26 @@ export function medianFilter(values: Float32Array, window: number): Float32Array
     out[i] = buffer[(buffer.length - 1) >> 1];
   }
   return out;
+}
+
+/**
+ * Déduit le seuil de fondu au noir de la distribution du canal sombre.
+ *
+ * Les fondus ne représentent que quelques pourcents des images, donc le haut de
+ * la distribution les contient. On prend la moitié de ce sommet pour attraper
+ * la montée du fondu et pas seulement sa pointe, puis on borne le résultat.
+ */
+export function adaptiveDarkThreshold(
+  dark: Float32Array,
+  min: number,
+  max: number,
+): number {
+  if (dark.length === 0) return max;
+
+  const tri = Float32Array.from(dark).sort();
+  const sommet = tri[Math.min(tri.length - 1, Math.floor(tri.length * 0.99))];
+
+  return Math.min(max, Math.max(min, sommet * 0.5));
 }
 
 /** Déquantifie un canal 0-255 en ratios 0-1. */
@@ -195,6 +228,11 @@ export function segment(
   const hud = medianFilter(dequantize(signal.hud), options.medianWindow);
   const dark = dequantize(signal.dark);
 
+  const darkThreshold =
+    options.darkThreshold === 'auto'
+      ? adaptiveDarkThreshold(dark, options.darkThresholdMin, options.darkThresholdMax)
+      : options.darkThreshold;
+
   // L'ordre compte : on écarte le bruit avant de fusionner, sinon un sursaut
   // parasite scinde un trou légitime en deux trous trop courts pour être vus.
   const fragments = hysteresis(
@@ -223,13 +261,13 @@ export function segment(
     const snappedStart = snapStartToBlack(
       interval.from,
       dark,
-      options.darkThreshold,
+      darkThreshold,
       lookback,
     );
     const snappedEnd = snapEndToBlack(
       interval.to,
       dark,
-      options.darkThreshold,
+      darkThreshold,
       lookahead,
     );
 

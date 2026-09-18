@@ -1,7 +1,7 @@
 import { ExpectedSet, GameCandidate } from '../../domain/alignment/alignment.types';
 import { AlignerOptions, DEFAULT_ALIGNER_OPTIONS, alignSets } from './set-aligner';
 import { estimateBias } from './offset-estimator';
-import { DEFAULT_SEGMENTER_OPTIONS, segment } from './segmenter';
+import { DEFAULT_SEGMENTER_OPTIONS, adaptiveDarkThreshold, segment } from './segmenter';
 import { filterSetsToVodWindow } from './vod-window';
 
 const RECORDED_AT = 1_700_000_000;
@@ -161,6 +161,37 @@ describe('estimateBias', () => {
 
     expect(estimate.biasSeconds).toBe(0);
     expect(estimate.confidence).toBe(0);
+  });
+});
+
+describe('adaptiveDarkThreshold', () => {
+  /** Signal où `part` des images atteignent `pic` de noirceur, le reste ~0,02. */
+  function signalDark(part: number, pic: number, length = 1000): Float32Array {
+    const dark = new Float32Array(length).fill(0.02);
+    for (let i = 0; i < Math.round(length * part); i++) dark[i] = pic;
+    return dark;
+  }
+
+  it('descend le seuil sur un habillage aux fondus peu profonds', () => {
+    // VGBootCamp : le cadre reste allumé, la noirceur plafonne vers 0,6.
+    const seuil = adaptiveDarkThreshold(signalDark(0.08, 0.6), 0.2, 0.9);
+
+    expect(seuil).toBeLessThan(0.6);
+    expect(seuil).toBeGreaterThanOrEqual(0.2);
+  });
+
+  it('remonte le seuil sur un habillage aux fondus francs', () => {
+    // UFA : vrai fondu au noir, la noirceur dépasse 0,95.
+    const seuil = adaptiveDarkThreshold(signalDark(0.08, 0.95), 0.2, 0.9);
+
+    expect(seuil).toBeGreaterThan(0.4);
+    expect(seuil).toBeLessThanOrEqual(0.9);
+  });
+
+  it('reste dans ses bornes sur un signal sans aucun fondu', () => {
+    const seuil = adaptiveDarkThreshold(new Float32Array(500).fill(0.01), 0.2, 0.9);
+
+    expect(seuil).toBe(0.2);
   });
 });
 

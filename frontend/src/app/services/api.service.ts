@@ -84,6 +84,46 @@ export interface Clip {
   createdAt: string;
 }
 
+/** Une game détectée dans la vidéo. */
+export interface AlignedGame {
+  startSeconds: number;
+  endSeconds: number;
+  confidence: number;
+  snappedToBlack: boolean;
+  ocrConfirmed: boolean | null;
+}
+
+export interface AlignedSet {
+  set: {
+    setStartGGId: string;
+    roundName: string;
+    phaseName?: string;
+    players: string;
+    score?: string;
+    gameCount: number | null;
+  };
+  games: AlignedGame[];
+  startSeconds: number;
+  endSeconds: number;
+  /** `video` = bornes issues de la vidéo, `api` = repli sur Start.gg. */
+  source: 'video' | 'video-partial' | 'api';
+  confidence: number;
+  warnings: string[];
+}
+
+export interface AlignmentReport {
+  vodId: string;
+  biasSeconds: number;
+  biasConfidence: number;
+  candidatesDetected: number;
+  setsTotal: number;
+  setsFromVideo: number;
+  setsPartial: number;
+  setsFromApiOnly: number;
+  aligned: AlignedSet[];
+  generatedAt: string;
+}
+
 export interface ClipPlan {
   vodId: string;
   totalGamePairs: number;
@@ -218,6 +258,24 @@ export class ApiService {
 
   getClipThumbnailUrl(clipId: string): string {
     return `${this.base}/clips/${clipId}/thumbnail`;
+  }
+
+  // Alignement : détection vidéo recalée sur la structure Start.gg
+  alignVod(vodId: string, body: { reuseStoredSignal?: boolean; useOcrValidation?: boolean } = {}): Observable<{ jobId: string; message: string }> {
+    return this.http.post<{ jobId: string; message: string }>(`${this.base}/vods/${vodId}/align`, body);
+  }
+
+  getAlignment(vodId: string): Observable<AlignmentReport> {
+    return this.http.get<AlignmentReport>(`${this.base}/vods/${vodId}/alignment`);
+  }
+
+  generateClipsFromAlignment(
+    vodId: string,
+    body: { minConfidence?: number; includeApiOnly?: boolean } = {},
+  ): Observable<{ enqueuedSets: number; skippedSets: Array<{ roundName: string; players: string; reason: string }>; message: string }> {
+    return this.http.post<any>(`${this.base}/vods/${vodId}/clips-from-alignment`, body).pipe(
+      tap(() => this.invalidate(`clips:${vodId}`)),
+    );
   }
 
   generateClips(vodId: string, body: { vodRecordedAtUnix?: number; preBufferSeconds?: number; postBufferSeconds?: number }): Observable<any> {

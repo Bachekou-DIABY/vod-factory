@@ -2,7 +2,7 @@ import { Component, inject, signal, computed, OnInit, OnDestroy, ViewChild, Elem
 import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
-import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../services/api.service';
+import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview, AlignmentReport } from '../../services/api.service';
 
 /**
  * Minuscules sans accents, pour que « Régis » se trouve en tapant « regis ».
@@ -348,15 +348,105 @@ function normaliser(texte: string): string {
           </div>
         }
 
-        <!-- Import sets button -->
-        <div class="flex gap-3 mb-6 flex-wrap">
+        <!-- Actions de découpage -->
+        <div class="flex gap-3 mb-6 flex-wrap items-center">
+          <button
+            (click)="lancerAnalyse()"
+            [disabled]="analyseEnCours() || !vod()?.recordedAt"
+            [title]="vod()?.recordedAt ? 'Détecte les games dans la vidéo et les recale sur Start.gg' : 'Calibre le début du stream avant de lancer une analyse'"
+            class="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:opacity-40 rounded-lg text-sm font-medium transition-colors"
+          >
+            {{ analyseEnCours() ? '⏳ Analyse en cours…' : '🎯 Analyser la vidéo' }}
+          </button>
           <button
             (click)="openImportSets()"
-            class="px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded-lg text-sm font-medium transition-colors"
+            class="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium transition-colors"
           >
-            ⚡ Importer les sets
+            Calibrer / import simple
           </button>
+          @if (!vod()?.recordedAt) {
+            <span class="text-xs text-amber-500">Calibre le début du stream avant d'analyser.</span>
+          }
         </div>
+
+        @if (analyseMsg()) {
+          <p class="text-xs mb-4" [class]="analyseErreur() ? 'text-red-400' : 'text-gray-400'">{{ analyseMsg() }}</p>
+        }
+
+        <!-- Rapport d'alignement -->
+        @if (rapport(); as r) {
+          <div class="mb-8 bg-gray-900 border border-gray-700 rounded-xl p-5">
+            <div class="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+              <h2 class="text-sm font-semibold text-gray-300">Analyse de la vidéo</h2>
+              <span class="text-xs text-gray-500">
+                {{ r.setsFromVideo }} calés sur la vidéo · {{ r.setsPartial }} partiels · {{ r.setsFromApiOnly }} non détectés
+              </span>
+            </div>
+
+            <p class="text-xs text-gray-500 mb-4 leading-relaxed">
+              {{ r.candidatesDetected }} games détectées. Décalage estimé des horaires Start.gg :
+              {{ r.biasSeconds }} s (fiabilité {{ (r.biasConfidence * 100).toFixed(0) }} %).
+            </p>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead class="text-gray-500 border-b border-gray-800">
+                  <tr>
+                    <th class="text-left font-medium py-2">Set</th>
+                    <th class="text-left font-medium py-2">Games</th>
+                    <th class="text-left font-medium py-2">Confiance</th>
+                    <th class="text-left font-medium py-2">Découpe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (a of r.aligned; track a.set.setStartGGId) {
+                    <tr class="border-b border-gray-800/60 align-top">
+                      <td class="py-2 pr-3">
+                        <div class="text-gray-200">{{ a.set.roundName }}</div>
+                        <div class="text-gray-500">{{ a.set.players }}</div>
+                        @for (w of a.warnings; track w) {
+                          <div class="text-amber-500 mt-1">⚠ {{ w }}</div>
+                        }
+                      </td>
+                      <td class="py-2 pr-3 whitespace-nowrap">
+                        <span [class]="a.source === 'video' ? 'text-green-400' : a.source === 'video-partial' ? 'text-amber-400' : 'text-gray-600'">
+                          {{ a.games.length }}{{ a.set.gameCount !== null ? ' / ' + a.set.gameCount : '' }}
+                        </span>
+                      </td>
+                      <td class="py-2 pr-3 whitespace-nowrap">
+                        <span [class]="a.confidence >= 0.8 ? 'text-green-400' : a.confidence >= minConfiance ? 'text-amber-400' : 'text-red-400'">
+                          {{ (a.confidence * 100).toFixed(0) }} %
+                        </span>
+                      </td>
+                      <td class="py-2 font-mono text-gray-400 whitespace-nowrap">
+                        @if (a.source === 'api') {
+                          <span class="text-gray-600">non détecté</span>
+                        } @else {
+                          {{ toHMS(a.startSeconds) }} → {{ toHMS(a.endSeconds) }}
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="flex gap-3 items-center mt-4 flex-wrap">
+              <label class="text-xs text-gray-400">
+                Confiance minimale
+                <input type="number" [(ngModel)]="minConfiance" min="0" max="1" step="0.05"
+                  class="w-20 ml-2 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white" />
+              </label>
+              <button (click)="genererDepuisAnalyse()" [disabled]="generationEnCours()"
+                class="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 disabled:opacity-40 rounded-lg text-xs font-medium transition-colors">
+                {{ generationEnCours() ? 'Génération…' : '✂️ Générer les clips' }}
+              </button>
+              <span class="text-xs text-gray-600">
+                {{ setsRetenus() }} set(s) seront découpés, les autres sont laissés pour revue.
+              </span>
+            </div>
+          </div>
+        }
 
         <!-- Import sets form -->
         @if (showImportSets()) {
@@ -728,6 +818,15 @@ export class VodDetailPage implements OnInit, OnDestroy {
   /** Signal, et non propriété simple : `calibrationSetsParPhase` en dépend. */
   selectedCalibrationStream = signal('');
   calibrationSearch = signal('');
+
+  // --- Alignement ---
+  rapport = signal<AlignmentReport | null>(null);
+  analyseEnCours = signal(false);
+  analyseMsg = signal('');
+  analyseErreur = signal(false);
+  generationEnCours = signal(false);
+  minConfiance = 0.45;
+  private sondageAnalyse: ReturnType<typeof setInterval> | null = null;
   calibrationMsg = signal('');
   importPreBuffer = 30;
   importPostBuffer = 30;
@@ -802,9 +901,13 @@ export class VodDetailPage implements OnInit, OnDestroy {
       error: () => this.loading.set(false),
     });
     this.api.getClips(id).subscribe({ next: (c) => this.clips.set(c) });
+    this.chargerRapportExistant(id);
   }
 
-  ngOnDestroy() { this.stopPolling(); }
+  ngOnDestroy() {
+    this.stopPolling();
+    this.arreterSondage();
+  }
 
   startEditName(v: Vod) {
     this.editNameValue = v.name ?? '';
@@ -1261,6 +1364,102 @@ export class VodDetailPage implements OnInit, OnDestroy {
   calibrationSetsAffiches = computed(() =>
     this.calibrationSetsParPhase().reduce((n, p) => n + p.sets.length, 0),
   );
+
+  /** Sets qui passeront le seuil de confiance à la génération. */
+  setsRetenus(): number {
+    const r = this.rapport();
+    if (!r) return 0;
+    return r.aligned.filter(
+      (a) => a.source !== 'api' && a.set.gameCount !== 0 && a.confidence >= this.minConfiance,
+    ).length;
+  }
+
+  /**
+   * Lance l'analyse puis interroge le rapport jusqu'à ce qu'il change.
+   *
+   * Le traitement tourne dans une file côté serveur et peut durer plusieurs
+   * minutes sur une longue VOD, d'où le sondage plutôt qu'une attente bloquante.
+   */
+  lancerAnalyse() {
+    const v = this.vod();
+    if (!v || this.analyseEnCours()) return;
+
+    const precedent = this.rapport()?.generatedAt ?? null;
+    this.analyseEnCours.set(true);
+    this.analyseErreur.set(false);
+    this.analyseMsg.set('Analyse lancée. Le décodage dure environ une minute par heure de vidéo.');
+
+    this.api.alignVod(v.id).subscribe({
+      next: () => this.sonderAnalyse(v.id, precedent),
+      error: (err) => {
+        this.analyseEnCours.set(false);
+        this.analyseErreur.set(true);
+        this.analyseMsg.set(err?.error?.message ?? "Impossible de lancer l'analyse.");
+      },
+    });
+  }
+
+  private sonderAnalyse(vodId: string, precedent: string | null) {
+    this.arreterSondage();
+    let essais = 0;
+    this.sondageAnalyse = setInterval(() => {
+      essais++;
+      this.api.getAlignment(vodId).subscribe({
+        next: (r) => {
+          if (r.generatedAt === precedent) return;
+          this.arreterSondage();
+          this.rapport.set(r);
+          this.analyseEnCours.set(false);
+          this.analyseMsg.set(
+            `Analyse terminée : ${r.setsFromVideo} set(s) calés sur la vidéo sur ${r.setsTotal}.`,
+          );
+        },
+        // 404 tant qu'aucun rapport n'existe : c'est le cas nominal au début.
+        error: () => { /* on réessaie au prochain tour */ },
+      });
+      if (essais > 120) {
+        this.arreterSondage();
+        this.analyseEnCours.set(false);
+        this.analyseErreur.set(true);
+        this.analyseMsg.set('Analyse toujours en cours après 10 minutes. Recharge la page pour voir le résultat.');
+      }
+    }, 5000);
+  }
+
+  private arreterSondage() {
+    if (this.sondageAnalyse) {
+      clearInterval(this.sondageAnalyse);
+      this.sondageAnalyse = null;
+    }
+  }
+
+  genererDepuisAnalyse() {
+    const v = this.vod();
+    if (!v || this.generationEnCours()) return;
+
+    this.generationEnCours.set(true);
+    this.analyseErreur.set(false);
+    this.api.generateClipsFromAlignment(v.id, { minConfidence: this.minConfiance }).subscribe({
+      next: (res) => {
+        this.generationEnCours.set(false);
+        this.analyseMsg.set(res.message);
+        setTimeout(() => this.api.getClips(v.id).subscribe(c => this.clips.set(c)), 2000);
+      },
+      error: (err) => {
+        this.generationEnCours.set(false);
+        this.analyseErreur.set(true);
+        this.analyseMsg.set(err?.error?.message ?? 'Échec de la génération.');
+      },
+    });
+  }
+
+  /** Rapport déjà calculé, s'il existe. 404 attendu quand il n'y en a pas. */
+  private chargerRapportExistant(vodId: string) {
+    this.api.getAlignment(vodId).subscribe({
+      next: (r) => this.rapport.set(r),
+      error: () => this.rapport.set(null),
+    });
+  }
 
   loadCalibrationSets() {
     const eventId = this.vod()?.eventStartGGId;
