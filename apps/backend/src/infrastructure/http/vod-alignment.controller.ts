@@ -107,7 +107,12 @@ export class VodAlignmentController {
    * `enterThreshold` / `exitThreshold` sans tâtonner.
    */
   @Get(':id/alignment/signal')
-  async getSignal(@Param('id') id: string, @Query('points') points?: string) {
+  async getSignal(
+    @Param('id') id: string,
+    @Query('points') points?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
     const vod: any = await this.vodRepository.findById(id);
     if (!vod) throw new NotFoundException(`VOD ${id} non trouvée`);
 
@@ -118,11 +123,25 @@ export class VodAlignmentController {
       );
     }
 
-    const target = Math.max(50, Math.min(5000, parseInt(points ?? '1000', 10) || 1000));
-    const stride = Math.max(1, Math.floor(signal.hud.length / target));
+    // Fenêtrage : sans lui, une VOD de dix heures ne se lit qu'à un échantillon
+    // toutes les sept secondes, trop grossier pour situer une frontière de game.
+    const toIndex = (seconds: string | undefined, defaut: number) => {
+      const v = parseInt(seconds ?? '', 10);
+      if (!isFinite(v)) return defaut;
+      return Math.max(
+        0,
+        Math.min(signal.hud.length, Math.round((v - signal.startSeconds) * signal.sampleRate)),
+      );
+    };
+
+    const debut = toIndex(from, 0);
+    const fin = Math.max(debut + 1, toIndex(to, signal.hud.length));
+
+    const target = Math.max(50, Math.min(20000, parseInt(points ?? '1000', 10) || 1000));
+    const stride = Math.max(1, Math.floor((fin - debut) / target));
 
     const series: Array<{ t: number; hud: number; dark: number }> = [];
-    for (let i = 0; i < signal.hud.length; i += stride) {
+    for (let i = debut; i < fin; i += stride) {
       series.push({
         t: Math.round(signal.startSeconds + i / signal.sampleRate),
         hud: +(signal.hud[i] / 255).toFixed(4),
@@ -130,9 +149,9 @@ export class VodAlignmentController {
       });
     }
 
-    // 20 classes de largeur 0.05 sur le canal HUD.
+    // 20 classes de largeur 0.05 sur le canal HUD, sur la fenêtre demandée.
     const histogram = new Array(20).fill(0);
-    for (let i = 0; i < signal.hud.length; i++) {
+    for (let i = debut; i < fin; i++) {
       const bucket = Math.min(19, Math.floor((signal.hud[i] / 255) * 20));
       histogram[bucket]++;
     }
@@ -140,6 +159,10 @@ export class VodAlignmentController {
     return {
       sampleRate: signal.sampleRate,
       samples: signal.hud.length,
+      window: {
+        fromSeconds: Math.round(signal.startSeconds + debut / signal.sampleRate),
+        toSeconds: Math.round(signal.startSeconds + fin / signal.sampleRate),
+      },
       stride,
       series,
       histogram: histogram.map((count, i) => ({

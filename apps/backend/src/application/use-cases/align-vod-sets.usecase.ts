@@ -34,6 +34,7 @@ import {
 } from '../alignment/segmenter';
 import { OffsetEstimate, estimateBias } from '../alignment/offset-estimator';
 import { filterSetsToVodWindow } from '../alignment/vod-window';
+import { splitToMatchCount } from '../alignment/game-splitter';
 import {
   AlignerOptions,
   DEFAULT_ALIGNER_OPTIONS,
@@ -191,6 +192,18 @@ export class AlignVodSetsUseCase {
         aligned = alignSets(sets, candidates, alignerOptions);
       }
 
+      // Dernier recours : là où le score annonce encore plus de games qu'on
+      // n'en a, c'est que deux d'entre elles sont recollées. On coupe la plus
+      // longue à son creux de noirceur, autant de fois que nécessaire.
+      const decoupees = this.splitMergedGames(signal, aligned);
+      if (decoupees > 0) {
+        this.logger.log(
+          `✂️ ${decoupees} game(s) recollée(s) séparée(s) d'après le score Start.gg`,
+        );
+        candidates = this.rebuildCandidates(aligned, candidates);
+        aligned = alignSets(sets, candidates, alignerOptions);
+      }
+
       const report = this.buildReport(input.vodId, bias, candidates, aligned);
       await this.persist(input.vodId, report, signal);
 
@@ -310,6 +323,41 @@ export class AlignVodSetsUseCase {
     }
 
     return extra;
+  }
+
+  /**
+   * Découpe les games recollées des sets encore incomplets. Mute `aligned` et
+   * renvoie le nombre de coupes réalisées.
+   */
+  private splitMergedGames(signal: FrameSignal, aligned: AlignedSet[]): number {
+    let coupes = 0;
+
+    for (const entry of aligned) {
+      const attendu = entry.set.gameCount;
+      if (attendu === null || attendu === 0) continue;
+      if (entry.games.length >= attendu) continue;
+
+      const avant = entry.games.length;
+      entry.games = splitToMatchCount(entry.games, signal, attendu);
+      coupes += entry.games.length - avant;
+    }
+
+    return coupes;
+  }
+
+  /**
+   * Reconstruit la liste globale de candidats à partir des games réparties,
+   * en conservant les orphelins que l'alignement n'avait attribués à personne.
+   */
+  private rebuildCandidates(
+    aligned: AlignedSet[],
+    precedents: GameCandidate[],
+  ): GameCandidate[] {
+    const attribues = aligned.flatMap((a) => a.games);
+    const orphelins = precedents.filter((c) => !this.overlapsAny(c, attribues));
+    return [...attribues, ...orphelins].sort(
+      (a, b) => a.startSeconds - b.startSeconds,
+    );
   }
 
   private overlapsAny(candidate: GameCandidate, known: GameCandidate[]): boolean {
