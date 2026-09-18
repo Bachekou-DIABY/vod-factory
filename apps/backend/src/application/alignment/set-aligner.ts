@@ -41,7 +41,18 @@ export interface AlignerOptions {
    * moment où il appelle les joueurs. `completedAt` est le champ le plus bruité.
    */
   weightTimeEnd: number;
-  /** Plafond de l'écart temporel pris en compte, en secondes. */
+  /**
+   * Écart temporel toléré sans coût, en secondes.
+   *
+   * Le TO clique « set en cours » quand il appelle les joueurs, et « terminé »
+   * quand il y repense. Quelques minutes d'écart ne sont donc pas une anomalie
+   * mais le fonctionnement normal de l'outil, et ne doivent rien coûter. Sans
+   * cette zone morte, un set lancé en retard coûte plus cher qu'une game
+   * manquante, alors que le score est une donnée exacte et l'horodatage une
+   * approximation humaine.
+   */
+  timeDeadbandSeconds: number;
+  /** Plafond de l'écart temporel pénalisé, zone morte déduite, en secondes. */
   timeCapSeconds: number;
   /** Coût d'un candidat laissé de côté. */
   orphanPenalty: number;
@@ -65,6 +76,7 @@ export const DEFAULT_ALIGNER_OPTIONS: Omit<
   weightCount: 3,
   weightTime: 0.02,
   weightTimeEnd: 0.01,
+  timeDeadbandSeconds: 120,
   timeCapSeconds: 600,
   orphanPenalty: 1.5,
   // Élevé volontairement : un set passé on-stream avec un score valide est
@@ -84,6 +96,21 @@ function toVodSeconds(
 ): number | null {
   if (unixSeconds == null) return null;
   return unixSeconds - opts.recordedAtUnix + opts.biasSeconds;
+}
+
+/**
+ * Coût d'un écart à un horodatage API : gratuit dans la zone morte, linéaire
+ * ensuite, puis plafonné.
+ */
+function timeCost(
+  actual: number,
+  expected: number,
+  weight: number,
+  opts: AlignerOptions,
+): number {
+  const ecart = Math.abs(actual - expected) - opts.timeDeadbandSeconds;
+  if (ecart <= 0) return 0;
+  return Math.min(ecart, opts.timeCapSeconds) * weight;
 }
 
 /** Coût d'attribution des candidats [from, to) au set donné. */
@@ -118,20 +145,22 @@ function runCost(
   // reporter un set ne doit pas faire exploser le coût de tout l'alignement.
   const expectedStart = toVodSeconds(set.apiStartUnix, opts);
   if (expectedStart !== null) {
-    cost +=
-      Math.min(
-        Math.abs(candidates[from].startSeconds - expectedStart),
-        opts.timeCapSeconds,
-      ) * opts.weightTime;
+    cost += timeCost(
+      candidates[from].startSeconds,
+      expectedStart,
+      opts.weightTime,
+      opts,
+    );
   }
 
   const expectedEnd = toVodSeconds(set.apiEndUnix, opts);
   if (expectedEnd !== null) {
-    cost +=
-      Math.min(
-        Math.abs(candidates[to - 1].endSeconds - expectedEnd),
-        opts.timeCapSeconds,
-      ) * opts.weightTimeEnd;
+    cost += timeCost(
+      candidates[to - 1].endSeconds,
+      expectedEnd,
+      opts.weightTimeEnd,
+      opts,
+    );
   }
 
   // 3. Les games d'un même set s'enchaînent. Un trou de dix minutes entre deux

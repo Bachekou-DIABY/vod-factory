@@ -65,6 +65,14 @@ export interface AlignmentReport {
   /** 0-1 : netteté du pic de corrélation ayant produit le biais. */
   biasConfidence: number;
   candidatesDetected: number;
+  /**
+   * Candidats détectés qu'aucun set n'a retenus.
+   *
+   * Sans cette liste, un set incomplet est indistinguable de deux causes
+   * opposées : la game manquante n'a jamais été détectée, ou elle l'a été et
+   * l'alignement l'a écartée. Le remède n'est pas le même.
+   */
+  orphans: GameCandidate[];
   setsTotal: number;
   setsFromVideo: number;
   setsPartial: number;

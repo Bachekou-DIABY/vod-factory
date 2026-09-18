@@ -381,6 +381,22 @@ export class AlignVodSetsUseCase {
     return merged.sort((a, b) => a.startSeconds - b.startSeconds);
   }
 
+  /** Candidats qu'aucun set n'a retenus, pour le diagnostic. */
+  private findOrphans(
+    candidates: GameCandidate[],
+    aligned: AlignedSet[],
+  ): GameCandidate[] {
+    const retenus = new Set<string>();
+    for (const set of aligned) {
+      for (const game of set.games) {
+        retenus.add(`${game.startSeconds}-${game.endSeconds}`);
+      }
+    }
+    return candidates.filter(
+      (c) => !retenus.has(`${c.startSeconds}-${c.endSeconds}`),
+    );
+  }
+
   private buildReport(
     vodId: string,
     bias: OffsetEstimate,
@@ -392,6 +408,7 @@ export class AlignVodSetsUseCase {
       biasSeconds: bias.biasSeconds,
       biasConfidence: bias.confidence,
       candidatesDetected: candidates.length,
+      orphans: this.findOrphans(candidates, aligned),
       setsTotal: aligned.length,
       setsFromVideo: aligned.filter((a) => a.source === 'video').length,
       setsPartial: aligned.filter((a) => a.source === 'video-partial').length,
