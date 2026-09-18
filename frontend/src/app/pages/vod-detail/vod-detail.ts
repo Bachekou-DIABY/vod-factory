@@ -4,6 +4,18 @@ import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../services/api.service';
 
+/**
+ * Minuscules sans accents, pour que « Régis » se trouve en tapant « regis ».
+ * Les pseudos de la scène mélangent accents, kana et symboles.
+ */
+function normaliser(texte: string): string {
+  return (texte ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 @Component({
   selector: 'app-vod-detail',
   imports: [RouterLink, FormsModule],
@@ -372,16 +384,21 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
                         </p>
                         @if (calibrationStreams().length > 1) {
                           <select [ngModel]="selectedCalibrationStream()"
-                            (ngModelChange)="selectedCalibrationStream.set($event); selectedCalibrationSetId = ''"
+                            (ngModelChange)="selectedCalibrationStream.set($event); selectedCalibrationSetId = ''; calibrationSearch.set('')"
                             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:border-purple-500">
                             @for (c of calibrationStreams(); track c.nom) {
                               <option [value]="c.nom">📺 {{ c.nom }} — {{ c.nombre }} sets</option>
                             }
                           </select>
                         }
+                        <input type="text"
+                          [ngModel]="calibrationSearch()"
+                          (ngModelChange)="calibrationSearch.set($event)"
+                          placeholder="Filtrer par joueur, round ou phase…"
+                          class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 mb-2 focus:outline-none focus:border-purple-500" />
                         <select [(ngModel)]="selectedCalibrationSetId"
-                          class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:border-purple-500">
-                          <option value="">— Choisir un set —</option>
+                          class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-1 focus:outline-none focus:border-purple-500">
+                          <option value="">— Choisir un set ({{ calibrationSetsAffiches() }}) —</option>
                           @for (phase of calibrationSetsParPhase(); track phase.nom) {
                             <optgroup [label]="phase.nom">
                               @for (s of phase.sets; track s.id) {
@@ -390,6 +407,9 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
                             </optgroup>
                           }
                         </select>
+                        @if (calibrationSearch() && calibrationSetsAffiches() === 0) {
+                          <p class="text-xs text-amber-500 mb-2">Aucun set ne correspond sur cette chaîne.</p>
+                        }
                         <button (click)="calibrateFromSet()" [disabled]="!selectedCalibrationSetId"
                           class="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 disabled:opacity-40 rounded-lg text-xs font-medium transition-colors">
                           📍 Utiliser cette position ({{ toHMS(vodCurrentTime()) }})
@@ -707,6 +727,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
   selectedCalibrationSetId = '';
   /** Signal, et non propriété simple : `calibrationSetsParPhase` en dépend. */
   selectedCalibrationStream = signal('');
+  calibrationSearch = signal('');
   calibrationMsg = signal('');
   importPreBuffer = 30;
   importPostBuffer = 30;
@@ -1211,9 +1232,17 @@ export class VodDetailPage implements OnInit, OnDestroy {
   calibrationSetsParPhase = computed(() => {
     const groupes = new Map<string, Array<StartGGSetPreview & { heure: string }>>();
     const chaine = this.selectedCalibrationStream().trim().toLowerCase();
+    const recherche = normaliser(this.calibrationSearch());
 
     for (const s of this.calibrationSets()) {
       if (chaine && s.stream?.streamName?.trim().toLowerCase() !== chaine) continue;
+
+      if (recherche) {
+        const cible = normaliser(
+          `${s.player1?.name} ${s.player2?.name} ${s.roundName} ${s.phaseName}`,
+        );
+        if (!cible.includes(recherche)) continue;
+      }
       const nom = s.phaseName?.trim() || 'Sans phase';
       const heure = s.startTime
         ? new Date(s.startTime).toLocaleTimeString('fr-FR', {
@@ -1227,6 +1256,11 @@ export class VodDetailPage implements OnInit, OnDestroy {
 
     return [...groupes.entries()].map(([nom, sets]) => ({ nom, sets }));
   });
+
+  /** Nombre de sets actuellement proposés, chaîne et recherche appliquées. */
+  calibrationSetsAffiches = computed(() =>
+    this.calibrationSetsParPhase().reduce((n, p) => n + p.sets.length, 0),
+  );
 
   loadCalibrationSets() {
     const eventId = this.vod()?.eventStartGGId;

@@ -209,6 +209,27 @@ describe('segment', () => {
     expect(candidates[0].endSeconds).toBeGreaterThanOrEqual(319);
   });
 
+  it('ne recolle pas deux games séparées par un sursaut parasite', () => {
+    // Cas réel, overlay VGBootCamp sur Riptide 2026 : entre deux games, un
+    // élément lumineux s'affiche six secondes dans la zone du HUD. Le trou de
+    // 22 s se retrouve coupé en 6 s et 10 s, tous deux sous la tolérance de
+    // fusion, et les deux games étaient recollées en une seule.
+    const hud = new Uint8Array(1000);
+    const dark = new Uint8Array(1000);
+    for (let t = 100; t < 400; t++) hud[t] = 40;
+    for (let t = 422; t < 700; t++) hud[t] = 40;
+    // Le sursaut, au milieu du trou 400-422.
+    for (let t = 406; t < 412; t++) hud[t] = 27;
+
+    const candidates = segment(
+      { sampleRate: 1, startSeconds: 0, hud, dark },
+      DEFAULT_SEGMENTER_OPTIONS,
+    );
+
+    expect(candidates).toHaveLength(2);
+    expect(candidates[0].endSeconds).toBeLessThan(candidates[1].startSeconds);
+  });
+
   it('rejette les intervalles trop courts pour être une game', () => {
     const signal = buildSignal([{ from: 100, to: 120 }], 1000);
 

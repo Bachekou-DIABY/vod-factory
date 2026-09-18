@@ -24,6 +24,16 @@ export interface SegmenterOptions {
   minGameSeconds: number;
   /** Deux intervalles séparés par moins que cela sont fusionnés. */
   mergeGapSeconds: number;
+  /**
+   * Durée minimale d'un fragment pour qu'il compte comme du jeu, avant fusion.
+   *
+   * Certains habillages affichent un élément lumineux dans la zone du HUD
+   * pendant les transitions entre games. Ce bref sursaut coupe le trou en deux
+   * morceaux, chacun passant alors sous la tolérance de fusion, et deux games
+   * consécutives se retrouvent recollées. Écarter les fragments trop courts
+   * avant de fusionner supprime le problème à la racine.
+   */
+  minFragmentSeconds: number;
   /** Ratio de pixels sombres à partir duquel une frame est un fondu au noir. */
   darkThreshold: number;
   /** Fenêtre de recherche du fondu au noir précédant un début de game. */
@@ -38,6 +48,7 @@ export const DEFAULT_SEGMENTER_OPTIONS: SegmenterOptions = {
   medianWindow: 5,
   minGameSeconds: 45,
   mergeGapSeconds: 12,
+  minFragmentSeconds: 15,
   darkThreshold: 0.9,
   blackLookbackSeconds: 40,
   blackLookaheadSeconds: 10,
@@ -50,6 +61,7 @@ export const RELAXED_SEGMENTER_OPTIONS: SegmenterOptions = {
   exitThreshold: 0.012,
   minGameSeconds: 30,
   mergeGapSeconds: 8,
+  minFragmentSeconds: 10,
 };
 
 /** Filtre médian glissant. Supprime les pics isolés sans lisser les fronts. */
@@ -183,10 +195,15 @@ export function segment(
   const hud = medianFilter(dequantize(signal.hud), options.medianWindow);
   const dark = dequantize(signal.dark);
 
-  const raw = mergeClose(
-    hysteresis(hud, options.enterThreshold, options.exitThreshold),
-    toSamples(options.mergeGapSeconds),
-  );
+  // L'ordre compte : on écarte le bruit avant de fusionner, sinon un sursaut
+  // parasite scinde un trou légitime en deux trous trop courts pour être vus.
+  const fragments = hysteresis(
+    hud,
+    options.enterThreshold,
+    options.exitThreshold,
+  ).filter((i) => i.to - i.from >= toSamples(options.minFragmentSeconds));
+
+  const raw = mergeClose(fragments, toSamples(options.mergeGapSeconds));
 
   const minSamples = toSamples(options.minGameSeconds);
   const lookback = toSamples(options.blackLookbackSeconds);
