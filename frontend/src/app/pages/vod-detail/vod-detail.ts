@@ -371,7 +371,8 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
                           Choisis la chaîne qui correspond à ta vidéo, puis le set que tu vois au début. Positionne-toi dessus dans le player et clique "Utiliser cette position".
                         </p>
                         @if (calibrationStreams().length > 1) {
-                          <select [(ngModel)]="selectedCalibrationStream"
+                          <select [ngModel]="selectedCalibrationStream()"
+                            (ngModelChange)="selectedCalibrationStream.set($event); selectedCalibrationSetId = ''"
                             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:border-purple-500">
                             @for (c of calibrationStreams(); track c.nom) {
                               <option [value]="c.nom">📺 {{ c.nom }} — {{ c.nombre }} sets</option>
@@ -704,7 +705,8 @@ export class VodDetailPage implements OnInit, OnDestroy {
   calibrationSets = signal<StartGGSetPreview[]>([]);
   loadingCalibrationSets = signal(false);
   selectedCalibrationSetId = '';
-  selectedCalibrationStream = '';
+  /** Signal, et non propriété simple : `calibrationSetsParPhase` en dépend. */
+  selectedCalibrationStream = signal('');
   calibrationMsg = signal('');
   importPreBuffer = 30;
   importPostBuffer = 30;
@@ -1208,7 +1210,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
    */
   calibrationSetsParPhase = computed(() => {
     const groupes = new Map<string, Array<StartGGSetPreview & { heure: string }>>();
-    const chaine = this.selectedCalibrationStream.trim().toLowerCase();
+    const chaine = this.selectedCalibrationStream().trim().toLowerCase();
 
     for (const s of this.calibrationSets()) {
       if (chaine && s.stream?.streamName?.trim().toLowerCase() !== chaine) continue;
@@ -1247,10 +1249,11 @@ export class VodDetailPage implements OnInit, OnDestroy {
         // celles trouvées, sinon celle qui a diffusé le plus de sets.
         const chaines = this.calibrationStreams();
         const actuelle = this.vod()?.streamName?.trim().toLowerCase();
-        this.selectedCalibrationStream =
+        this.selectedCalibrationStream.set(
           chaines.find(c => c.nom.toLowerCase() === actuelle)?.nom ??
-          chaines[0]?.nom ??
-          '';
+            chaines[0]?.nom ??
+            '',
+        );
 
         this.loadingCalibrationSets.set(false);
       },
