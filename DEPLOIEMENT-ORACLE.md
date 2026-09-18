@@ -16,20 +16,22 @@ La machine est accessible par `ssh vod-factory`. Le dépôt est cloné dans
 cd ~/vod-factory
 docker compose -f docker-compose.production.yml --env-file .env.production ps
 ./deploy.sh              # redémarre sans reconstruire
-./deploy.sh --build      # reconstruit les images, ~20 min sur 2 cœurs ARM
+./deploy.sh --build      # reconstruit avec le cache Docker, quelques minutes
+./deploy.sh --rebuild    # reconstruction complète sans cache, ~20 min
 ```
-| Connexion YouTube testée en production | fait, chaîne « Bachekou DIABY » |
-| FFmpeg 8.0.1 et yt-dlp validés en aarch64 | fait |
-| Pipeline d'alignement poussé et déployé | **à faire** |
-| Portfolio migré, micro terminée, disque agrandi | **plus tard** |
 
-Le déploiement est terminé. Ce qui reste relève de l'évolution, pas de la mise
-en route.
+| Élément | Valeur |
+|---|---|
+| Instance | `vod-factory`, VM.Standard.A1.Flex, 2 OCPU / 12 Go |
+| IP publique | `130.110.250.226`, **réservée** |
+| Boot volume | 150 Go |
+| Domaine | `vod.bdiaby.fr`, HTTPS actif |
+| Utilisateur SSH | `ubuntu` |
+| Espace disque | 145 Go utilisables, 8 % occupés |
+| Mémoire | 11 Go, 1 Go utilisé au repos |
 
-**Le pipeline d'alignement n'est pas en production.** Il vit uniquement dans
-l'arbre de travail local, non commité. La version déployée est `main` sans lui,
-sans ses endpoints ni sa migration Prisma. Pour le déployer : commiter, pousser,
-puis sur le serveur `git pull && ./deploy.sh --build`.
+Le script `scripts/oci-launch-retry.sh` n'a plus lieu d'être lancé. Il reste
+utile si l'instance devait être recréée un jour.
 
 Test d'authentification, doit répondre en quelques secondes :
 
@@ -153,20 +155,7 @@ Sur l'image Ubuntu 24.04 aarch64 de septembre 2026, le REJECT est en position 5 
 
 ```bash
 sudo iptables -I INPUT 5 -m state --state NEW -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT 5 -m state --state NEW -p tcp --dport 44
-
-| Élément | Valeur |
-|---|---|
-| Instance | `vod-factory`, VM.Standard.A1.Flex, 2 OCPU / 12 Go |
-| IP publique | `130.110.250.226`, **réservée** |
-| Boot volume | 150 Go |
-| Domaine | `vod.bdiaby.fr`, HTTPS actif |
-| Utilisateur SSH | `ubuntu` |
-| Espace disque | 145 Go utilisables, 8 % occupés |
-| Mémoire | 11 Go, 1 Go utilisé au repos |
-
-Le script `scripts/oci-launch-retry.sh` n'a plus lieu d'être lancé. Il reste
-utile si l'instance devait être recréée un jour.
+sudo iptables -I INPUT 5 -m state --state NEW -p tcp --dport 443 -j ACCEPT
 
 ---
 
@@ -189,7 +178,15 @@ utile si l'instance devait être recréée un jour.
 | Certificat Let's Encrypt émis, expire le 16/12/2026 | fait |
 | Stack déployée et joignable en HTTPS | fait |
 | Hook de renouvellement du certificat | fait, validé en `--dry-run` |
-| URL de redirection OAuth déclarée chez Google | fait |3 -j ACCEPT
+| URL de redirection OAuth déclarée chez Google | fait |
+| Connexion YouTube testée en production | fait, chaîne « Bachekou DIABY » |
+| FFmpeg 8.0.1 et yt-dlp validés en aarch64 | fait |
+| Pipeline d'alignement poussé et déployé | **à faire** |
+| Portfolio migré, micro terminée, disque agrandi | **plus tard** |
+
+Le déploiement est terminé. Ce qui reste relève de l'évolution de la
+détection, pas de la mise en route. Voir la section « Reprise » en fin de
+document.
 sudo iptables -L INPUT -n --line-numbers      # REJECT doit être en dernier
 ```
 
@@ -219,7 +216,8 @@ avant.
 
 1. `sudo apt install -y certbot` puis `sudo certbot certonly --standalone -d vod.bdiaby.fr`
 2. `cp .env.production.example .env.production`, renseigner les valeurs.
-3. `./deploy.sh --build`, compter une vingtaine de minutes sur deux cœurs ARM.
+3. `./deploy.sh --rebuild` la première fois, une vingtaine de minutes. Ensuite
+   `./deploy.sh --build`, qui réutilise le cache Docker et prend quelques minutes.
 
 **Renouvellement du certificat.** `certbot renew` reprend le mode standalone
 alors que le port 80 est occupé par le conteneur nginx. Corrigé par deux hooks
