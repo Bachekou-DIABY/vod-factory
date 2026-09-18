@@ -1502,16 +1502,32 @@ export class VodDetailPage implements OnInit, OnDestroy {
     this.importRecordedAt = setUnix - videoPos;
     this.calibrationMsg.set(`✓ Calage : stream démarré le ${new Date(this.importRecordedAt * 1000).toLocaleString('fr-FR')}`);
 
-    // La chaîne du set fait foi : c'est elle qui servira à filtrer les sets au
-    // découpage. La laisser désynchronisée renverrait zéro set plus tard.
+    // Le calage est enregistré tout de suite, et pas seulement au moment de
+    // l'import : c'est lui qui conditionne l'analyse vidéo, et l'ancien import
+    // ne doit plus être un passage obligé pour l'activer.
+    //
+    // La chaîne du set est enregistrée avec, car c'est elle qui filtrera les
+    // sets au découpage. La laisser désynchronisée renverrait zéro set.
     const v = this.vod();
+    if (!v) return;
+
     const chaine = set.stream?.streamName?.trim();
-    if (v && chaine && chaine !== v.streamName) {
-      this.api.updateVod(v.id, { streamName: chaine }).subscribe({
-        next: () => this.vod.set({ ...v, streamName: chaine }),
-        error: () => { /* le calage reste valable, la chaîne sera à corriger */ },
-      });
-    }
+    const recordedAt = new Date(this.importRecordedAt * 1000).toISOString();
+    const maj: Partial<Vod> = { recordedAt };
+    if (chaine && chaine !== v.streamName) maj.streamName = chaine;
+
+    this.api.updateVod(v.id, maj).subscribe({
+      next: () => {
+        this.vod.set({ ...v, ...maj });
+        this.calibrationMsg.set(
+          `✓ Calage enregistré : stream démarré le ${new Date(this.importRecordedAt * 1000).toLocaleString('fr-FR')}. Tu peux lancer l'analyse.`,
+        );
+      },
+      error: () =>
+        this.calibrationMsg.set(
+          "⚠ Calage calculé mais non enregistré. Réessaie avant de lancer l'analyse.",
+        ),
+    });
   }
 
   importSets() {
