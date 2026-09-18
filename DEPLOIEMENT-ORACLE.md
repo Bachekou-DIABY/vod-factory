@@ -351,28 +351,56 @@ l'Ultimate Fighting Arena 2026, stream `Etoiles`, event `1619466`.
 secondes. Le second set, qui commence après la fin du fichier, a été
 correctement signalé en repli plutôt que découpé n'importe comment.
 
+### Validation sur la VOD complète, 18 septembre
+
+Top 8 SSBU d'UFA 2026, 4 h 02 de vidéo en 720p60, stream `Etoiles`, 10 sets.
+
+| Mesure | Résultat |
+|---|---|
+| Durée de l'analyse | 90 s pour 4 h de vidéo |
+| Sets alignés sur la vidéo | 10 sur 10, aucun partiel, aucun repli |
+| Nombre de games | conforme au score sur les 10 sets |
+| Biais estimé | -222 s, confiance 0,63 |
+| Confiance par set | 0,73 à 0,97 |
+
+Comparaison avec la génération par horaires Start.gg sur les mêmes sets :
+
+| Mesure | Horaires seuls | Alignement |
+|---|---|---|
+| Durée cumulée des clips | 227 min | 170 min |
+| Paires de clips qui se chevauchent | 5 | 0 |
+
+L'alignement retire une cinquantaine de minutes de temps mort sans perdre une
+game, et supprime les chevauchements où un set débordait sur le suivant.
+
+Deux sets sont passés sous 0,80 de confiance et méritent un contrôle visuel :
+Losers Quarter-Final Asimo contre Raflow, début repoussé de 462 s, et Losers
+Final CS contre Asimo, début repoussé de 368 s.
+
 ### À faire au retour, dans l'ordre
 
-1. **Pousser** le travail en cours, puis sur le serveur
-   `git pull && ./deploy.sh --build`.
-2. **Relancer l'analyse** sur la même VOD et vérifier que le rapport affiche
-   bien « games attendues 3 » et une confiance supérieure à 0,83. C'est la
-   preuve que la correction du parseur de score est effective.
+1. **Contrôler visuellement** les deux sets sous 0,80 de confiance, pour savoir
+   si l'écart aux horaires Start.gg est une vraie correction ou une game ratée.
+2. **Construire l'interface** de l'alignement, maintenant que la détection est
+   validée : bouton d'analyse à côté de l'import existant, barre de progression,
+   et tableau des sets avec confiance et avertissements à valider avant
+   génération des clips. Aujourd'hui tout se pilote en ligne de commande.
 
 ```bash
 curl -X POST https://vod.bdiaby.fr/api/vods/<id>/align -H 'Content-Type: application/json' -d '{}'
 curl -s https://vod.bdiaby.fr/api/vods/<id>/alignment
+curl -X POST https://vod.bdiaby.fr/api/vods/<id>/clips-from-alignment -H 'Content-Type: application/json' -d '{}'
 ```
 
-3. **Tester sur la VOD complète** de trois heures, qui contient une vingtaine de
-   sets. C'est le premier test où l'alignement aura vraiment quelque chose à
-   aligner, et où l'estimation du biais pourra fonctionner : elle exige au moins
-   trois sets horodatés et n'en avait que deux.
-4. **Construire l'interface** de l'alignement une fois la détection jugée
-   fiable : bouton d'analyse, progression, tableau des sets avec confiance et
-   avertissements avant génération des clips.
+Attention : les deux méthodes de découpage écrivent des clips au même schéma de
+nommage. Supprimer les clips existants avant de générer depuis l'alignement,
+sinon doublons en base et fichiers écrasés.
 
-### Corrections apportées, non déployées
+3. **Tester sur un autre TO**, avec un overlay différent, pour savoir si la zone
+   du HUD en dur tient ou s'il faut la calibrer par tournoi.
+4. **Valider un upload YouTube** depuis un clip issu de l'alignement.
+
+### Corrections apportées et déployées le 18 septembre
 
 - **Parseur de score.** Le format réel est `Nom1 3 - Nom2 0`, le second score en
   fin de chaîne. Le parseur attendait `3 - 0` collé au tiret et ne reconnaissait

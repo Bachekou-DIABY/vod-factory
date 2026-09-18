@@ -44,7 +44,16 @@ import { ApiService, Tournament, StartGGTournamentResult, YoutubeAccount } from 
               <div class="flex items-center justify-between px-4 py-3 bg-gray-900 hover:bg-gray-800 border-b border-gray-800 last:border-0">
                 <div>
                   <div class="text-sm font-medium">{{ result.name }}</div>
-                  <div class="text-xs text-gray-500 font-mono">{{ result.slug }}</div>
+                  <div class="text-xs text-gray-400 mt-0.5">
+                    {{ periode(result) }}
+                    @if (lieu(result)) {
+                      <span class="text-gray-600"> · </span>{{ lieu(result) }}
+                    }
+                    @if (result.numAttendees) {
+                      <span class="text-gray-600"> · </span>{{ result.numAttendees }} inscrits
+                    }
+                  </div>
+                  <div class="text-xs text-gray-600 font-mono mt-0.5">{{ result.slug }}</div>
                 </div>
                 <button
                   (click)="importSlug(result.slug)"
@@ -317,6 +326,24 @@ export class TournamentsPage implements OnInit {
       },
       error: () => this.archivingId.set(null),
     });
+  }
+
+  /** "12 – 14 sept. 2026", ou une seule date si le tournoi tient sur un jour. */
+  periode(t: StartGGTournamentResult): string {
+    if (!t.startAt) return 'date inconnue';
+    const debut = new Date(t.startAt * 1000);
+    const fin = t.endAt ? new Date(t.endAt * 1000) : null;
+    const jour: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+    if (!fin || debut.toDateString() === fin.toDateString()) {
+      return debut.toLocaleDateString('fr-FR', { ...jour, year: 'numeric' });
+    }
+    return `${debut.toLocaleDateString('fr-FR', jour)} – ${fin.toLocaleDateString('fr-FR', { ...jour, year: 'numeric' })}`;
+  }
+
+  /** "Sandusky, US", ou "en ligne". Vide si Start.gg ne renseigne rien. */
+  lieu(t: StartGGTournamentResult): string {
+    if (t.isOnline) return 'en ligne';
+    return [t.city, t.countryCode].filter(Boolean).join(', ');
   }
 
   importSlug(slug: string) {

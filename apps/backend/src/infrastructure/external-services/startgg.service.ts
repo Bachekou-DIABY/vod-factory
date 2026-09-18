@@ -6,6 +6,12 @@ import { print } from 'graphql';
 import { IStartGGService, StartGGEventResponse, StartGGSetResponse, StartGGTournamentSearchResult } from '../../domain/services/startgg.service.interface';
 import { Tournament } from '../../domain/entities/tournament.entity';
 
+/**
+ * Pages de sets récupérées en parallèle. Start.gg plafonne à 80 requêtes par
+ * minute, donc on reste modeste.
+ */
+const STARTGG_PAGE_BATCH = 5;
+
 interface StartGGEvent {
   id: string;
   name: string;
@@ -93,12 +99,17 @@ export class StartGGService implements IStartGGService {
   async searchTournaments(query: string): Promise<StartGGTournamentSearchResult[]> {
     const gqlQuery = gql`
       query SearchTournaments($query: String!) {
-        tournaments(query: { perPage: 15, filter: { name: $query } }) {
+        tournaments(query: { perPage: 30, filter: { name: $query } }) {
           nodes {
             id
             name
             slug
             startAt
+            endAt
+            city
+            countryCode
+            isOnline
+            numAttendees
           }
         }
       }
@@ -109,12 +120,25 @@ export class StartGGService implements IStartGGService {
         { query: print(gqlQuery), variables: { query } },
         { headers: { Authorization: `Bearer ${this.apiToken}` } },
       );
-      return (response.data?.data?.tournaments?.nodes || []).map((t: any) => ({
-        id: t.id.toString(),
-        name: t.name,
-        slug: (t.slug as string).replace(/^tournament\//, ''),
-        startAt: t.startAt,
-      }));
+      // Start.gg trie par pertinence textuelle, ce qui fait remonter les
+      // weeklies dont le nom cite un gros tournoi avant le tournoi lui-même.
+      // Le nombre d'inscrits sépare bien mieux les deux.
+      return (response.data?.data?.tournaments?.nodes || [])
+        .map((t: any) => ({
+          id: t.id.toString(),
+          name: t.name,
+          slug: (t.slug as string).replace(/^tournament\//, ''),
+          startAt: t.startAt,
+          endAt: t.endAt,
+          city: t.city ?? undefined,
+          countryCode: t.countryCode ?? undefined,
+          isOnline: t.isOnline ?? undefined,
+          numAttendees: t.numAttendees ?? undefined,
+        }))
+        .sort(
+          (a: StartGGTournamentSearchResult, b: StartGGTournamentSearchResult) =>
+            (b.numAttendees ?? 0) - (a.numAttendees ?? 0),
+        );
     } catch (error) {
       this.logger.error(`Error searching tournaments: ${error.message}`);
       return [];
@@ -249,32 +273,17 @@ export class StartGGService implements IStartGGService {
   }
 
   async getAllSetsByEventId(eventStartGGId: string, streamName?: string): Promise<StartGGSetResponse[]> {
-    const allSets: StartGGSetNode[] = [];
-    let page = 1;
-    let totalPages = 1;
-
-    do {
-      const query = `query { event(id: ${eventStartGGId}) { sets(page: ${page}, perPage: 50) { pageInfo { totalPages } nodes { id fullRoundText winnerId displayScore totalGames startedAt completedAt phaseGroup { phase { name } } stream { streamName streamId } slots { entrant { id name } } } } } }`;
-      try {
-        const response = await axios.post(
+    const allSets = await this.paginate((page) =>
+      axios
+        .post(
           this.apiUrl,
-          { query },
+          {
+            query: `query { event(id: ${eventStartGGId}) { sets(page: ${page}, perPage: 50) { pageInfo { totalPages } nodes { id fullRoundText winnerId displayScore totalGames startedAt completedAt phaseGroup { phase { name } } stream { streamName streamId } slots { entrant { id name } } } } } }`,
+          },
           { headers: { Authorization: `Bearer ${this.apiToken}` } },
-        );
-        if (response.data?.errors) {
-          this.logger.error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
-          break;
-        }
-        const data = response.data?.data?.event?.sets;
-        if (!data) break;
-        totalPages = data.pageInfo?.totalPages ?? 1;
-        allSets.push(...(data.nodes as StartGGSetNode[]));
-        page++;
-      } catch (error) {
-        this.logger.error(`Error fetching sets page ${page} for event ${eventStartGGId}: ${error.message}`);
-        break;
-      }
-    } while (page <= totalPages);
+        )
+        .then((r) => r.data),
+    );
 
     // Le nom de stream est saisi à la main : on tolère espaces et casse des
     // deux côtés, sinon un " Etoiles " ne correspond à rien et l'appelant
@@ -356,28 +365,61 @@ export class StartGGService implements IStartGGService {
   }
 
   private async paginateEventSets(eventId: string, printedQuery: string): Promise<StartGGSetNode[]> {
-    const allSets: StartGGSetNode[] = [];
-    let page = 1;
-    let totalPages = 1;
+    return this.paginate((page) =>
+      axios
+        .post(
+          this.apiUrl,
+          { query: printedQuery, variables: { eventId, page } },
+          { headers: { Authorization: `Bearer ${this.apiToken}` } },
+        )
+        .then((r) => r.data),
+    );
+  }
 
-    do {
-      const response = await axios.post(
-        this.apiUrl,
-        { query: printedQuery, variables: { eventId, page } },
-        { headers: { Authorization: `Bearer ${this.apiToken}` } }
+  /**
+   * Parcourt les pages de sets d'un event.
+   *
+   * Une épreuve d'affiche compte facilement mille sets, soit vingt pages. En
+   * séquentiel ça représente une quinzaine de secondes d'attente avant que
+   * l'interface affiche quoi que ce soit. On lit donc la première page pour
+   * connaître le nombre total, puis on récupère les suivantes par lots.
+   *
+   * Le lot est volontairement petit : Start.gg limite à quatre-vingts requêtes
+   * par minute, et rien ne sert de gagner deux secondes pour se faire brider.
+   */
+  private async paginate(
+    fetchPage: (page: number) => Promise<any>,
+  ): Promise<StartGGSetNode[]> {
+    const premiere = await fetchPage(1);
+    if (premiere?.errors) {
+      this.logger.error(`GraphQL errors: ${JSON.stringify(premiere.errors)}`);
+    }
+
+    const data = premiere?.data?.event?.sets;
+    if (!data) return [];
+
+    const totalPages: number = data.pageInfo?.totalPages ?? 1;
+    const allSets: StartGGSetNode[] = [...(data.nodes as StartGGSetNode[])];
+    if (totalPages <= 1) return allSets;
+
+    // Les pages arrivent dans le désordre au sein d'un lot, mais les appelants
+    // retrient systématiquement par startedAt, donc l'ordre n'importe pas.
+    const restantes = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+    for (let i = 0; i < restantes.length; i += STARTGG_PAGE_BATCH) {
+      const lot = restantes.slice(i, i + STARTGG_PAGE_BATCH);
+      const reponses = await Promise.all(
+        lot.map((page) =>
+          fetchPage(page).catch((err) => {
+            this.logger.error(`Error fetching sets page ${page}: ${err.message}`);
+            return null;
+          }),
+        ),
       );
-
-      if (response.data?.errors) {
-        this.logger.error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
+      for (const reponse of reponses) {
+        const nodes = reponse?.data?.event?.sets?.nodes;
+        if (nodes) allSets.push(...(nodes as StartGGSetNode[]));
       }
-
-      const data = response.data?.data?.event?.sets;
-      if (!data) break;
-
-      totalPages = data.pageInfo?.totalPages ?? 1;
-      allSets.push(...(data.nodes as StartGGSetNode[]));
-      page++;
-    } while (page <= totalPages);
+    }
 
     return allSets;
   }

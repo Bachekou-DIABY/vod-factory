@@ -368,8 +368,16 @@ import { ApiService, Vod, Clip, ClipPlan, StartGGSetPreview } from '../../servic
                         <p class="text-xs text-gray-500">Chargement des sets...</p>
                       } @else if (calibrationSets().length) {
                         <p class="text-xs text-gray-400 mb-2 leading-relaxed">
-                          Sets du plus ancien au plus récent. Cherche lequel tu vois au début de ta vidéo, positionne-toi dessus dans le player, puis clique "Utiliser cette position".
+                          Choisis la chaîne qui correspond à ta vidéo, puis le set que tu vois au début. Positionne-toi dessus dans le player et clique "Utiliser cette position".
                         </p>
+                        @if (calibrationStreams().length > 1) {
+                          <select [(ngModel)]="selectedCalibrationStream"
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:border-purple-500">
+                            @for (c of calibrationStreams(); track c.nom) {
+                              <option [value]="c.nom">📺 {{ c.nom }} — {{ c.nombre }} sets</option>
+                            }
+                          </select>
+                        }
                         <select [(ngModel)]="selectedCalibrationSetId"
                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:border-purple-500">
                           <option value="">— Choisir un set —</option>
@@ -696,6 +704,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
   calibrationSets = signal<StartGGSetPreview[]>([]);
   loadingCalibrationSets = signal(false);
   selectedCalibrationSetId = '';
+  selectedCalibrationStream = '';
   calibrationMsg = signal('');
   importPreBuffer = 30;
   importPostBuffer = 30;
@@ -1175,13 +1184,34 @@ export class VodDetailPage implements OnInit, OnDestroy {
   }
 
   /**
-   * Regroupe les sets de calibrage par phase du tournoi, et affiche l'heure
-   * Start.gg de chacun pour aider à retrouver celui qu'on voit à l'écran.
+   * Chaînes de diffusion présentes dans les sets, avec leur nombre de sets.
+   *
+   * Un gros tournoi diffuse sur plusieurs chaînes en parallèle, par exemple
+   * `vgbootcamp`, `vgbootcamp2` et `vgbootcamp4` pour un même event. Se tromper
+   * de chaîne vidait la liste sans rien expliquer.
+   */
+  calibrationStreams = computed(() => {
+    const comptes = new Map<string, number>();
+    for (const s of this.calibrationSets()) {
+      const nom = s.stream?.streamName?.trim();
+      if (nom) comptes.set(nom, (comptes.get(nom) ?? 0) + 1);
+    }
+    return [...comptes.entries()]
+      .map(([nom, nombre]) => ({ nom, nombre }))
+      .sort((a, b) => b.nombre - a.nombre);
+  });
+
+  /**
+   * Regroupe les sets de la chaîne choisie par phase du tournoi, et affiche
+   * l'heure Start.gg de chacun pour aider à retrouver celui qu'on voit à
+   * l'écran.
    */
   calibrationSetsParPhase = computed(() => {
     const groupes = new Map<string, Array<StartGGSetPreview & { heure: string }>>();
+    const chaine = this.selectedCalibrationStream.trim().toLowerCase();
 
     for (const s of this.calibrationSets()) {
+      if (chaine && s.stream?.streamName?.trim().toLowerCase() !== chaine) continue;
       const nom = s.phaseName?.trim() || 'Sans phase';
       const heure = s.startTime
         ? new Date(s.startTime).toLocaleTimeString('fr-FR', {
@@ -1203,16 +1233,25 @@ export class VodDetailPage implements OnInit, OnDestroy {
     this.calibrationMsg.set('');
     // Seuls les sets passés à l'antenne peuvent servir de repère visuel. Sur une
     // affiche comme UFA, ça fait passer la liste de près de mille à cinquante.
-    this.api.getStartGGEventSets(eventId, {
-      onStreamOnly: true,
-      streamName: this.vod()?.streamName?.trim() || undefined,
-    }).subscribe({
+    // On ne filtre pas sur la chaîne de la VOD : l'utilisateur la choisit
+    // ensuite dans la liste, ce qui lui évite d'avoir à la deviner.
+    this.api.getStartGGEventSets(eventId, { onStreamOnly: true }).subscribe({
       next: ({ sets }) => {
         this.calibrationSets.set(
           sets
             .filter(s => !!s.startTime)
             .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime()),
         );
+
+        // Présélection : la chaîne déjà associée à la VOD si elle existe parmi
+        // celles trouvées, sinon celle qui a diffusé le plus de sets.
+        const chaines = this.calibrationStreams();
+        const actuelle = this.vod()?.streamName?.trim().toLowerCase();
+        this.selectedCalibrationStream =
+          chaines.find(c => c.nom.toLowerCase() === actuelle)?.nom ??
+          chaines[0]?.nom ??
+          '';
+
         this.loadingCalibrationSets.set(false);
       },
       error: () => this.loadingCalibrationSets.set(false),
@@ -1226,6 +1265,17 @@ export class VodDetailPage implements OnInit, OnDestroy {
     const videoPos = Math.floor(this.vodCurrentTime());
     this.importRecordedAt = setUnix - videoPos;
     this.calibrationMsg.set(`✓ Calage : stream démarré le ${new Date(this.importRecordedAt * 1000).toLocaleString('fr-FR')}`);
+
+    // La chaîne du set fait foi : c'est elle qui servira à filtrer les sets au
+    // découpage. La laisser désynchronisée renverrait zéro set plus tard.
+    const v = this.vod();
+    const chaine = set.stream?.streamName?.trim();
+    if (v && chaine && chaine !== v.streamName) {
+      this.api.updateVod(v.id, { streamName: chaine }).subscribe({
+        next: () => this.vod.set({ ...v, streamName: chaine }),
+        error: () => { /* le calage reste valable, la chaîne sera à corriger */ },
+      });
+    }
   }
 
   importSets() {

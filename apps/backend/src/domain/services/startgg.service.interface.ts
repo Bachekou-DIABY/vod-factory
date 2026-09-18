@@ -40,6 +40,14 @@ export interface StartGGTournamentSearchResult {
   name: string;
   slug: string;
   startAt?: number; // Unix timestamp
+  endAt?: number; // Unix timestamp
+  /** Ville du lieu, absente pour un tournoi en ligne. */
+  city?: string;
+  /** Code pays ISO, ex. "FR", "US". */
+  countryCode?: string;
+  isOnline?: boolean;
+  /** Nombre d'inscrits. Sert à faire remonter les vrais tournois. */
+  numAttendees?: number;
 }
 
 export interface IStartGGService {

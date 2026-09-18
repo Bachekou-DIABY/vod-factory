@@ -34,6 +34,8 @@ export interface StartGGSetPreview {
   player1: { name: string };
   player2: { name: string };
   startTime?: string;
+  /** Chaîne de diffusion. Un gros tournoi en utilise plusieurs en parallèle. */
+  stream?: { streamName: string };
 }
 
 export interface StartGGTournamentResult {
@@ -41,6 +43,11 @@ export interface StartGGTournamentResult {
   name: string;
   slug: string;
   startAt?: number;
+  endAt?: number;
+  city?: string;
+  countryCode?: string;
+  isOnline?: boolean;
+  numAttendees?: number;
 }
 
 export interface Vod {
