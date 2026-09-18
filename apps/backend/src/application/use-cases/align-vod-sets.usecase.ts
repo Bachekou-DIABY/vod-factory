@@ -36,6 +36,10 @@ import { OffsetEstimate, estimateBias } from '../alignment/offset-estimator';
 import { filterSetsToVodWindow } from '../alignment/vod-window';
 import { splitToMatchCount } from '../alignment/game-splitter';
 import {
+  DEFAULT_CLIP_BOUNDS_OPTIONS,
+  trimDeadPreRoll,
+} from '../alignment/clip-bounds';
+import {
   AlignerOptions,
   DEFAULT_ALIGNER_OPTIONS,
   alignSets,
@@ -202,6 +206,22 @@ export class AlignVodSetsUseCase {
         );
         candidates = this.rebuildCandidates(aligned, candidates);
         aligned = alignSets(sets, candidates, alignerOptions);
+      }
+
+      // Le début de clip est enfin recalé sur le contenu de l'image, pour ne pas
+      // ouvrir sur l'écran d'attente qui précède souvent un set.
+      const avant = aligned;
+      aligned = trimDeadPreRoll(signal, aligned, {
+        ...DEFAULT_CLIP_BOUNDS_OPTIONS,
+        // Rester cohérent avec la marge demandée : le recalage raccourcit, il
+        // ne doit jamais rallonger le clip.
+        preRollSeconds: alignerOptions.preRollSeconds,
+      });
+      const recalés = aligned.filter((a, i) => a.startSeconds !== avant[i].startSeconds);
+      if (recalés.length > 0) {
+        this.logger.log(
+          `✂️ ${recalés.length} début(s) de clip recalé(s) pour ne pas ouvrir sur une image morte`,
+        );
       }
 
       const report = this.buildReport(input.vodId, bias, candidates, aligned);
