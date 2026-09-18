@@ -1406,7 +1406,8 @@ export class VodDetailPage implements OnInit, OnDestroy {
       essais++;
       this.api.getAlignment(vodId).subscribe({
         next: (r) => {
-          if (r.generatedAt === precedent) return;
+          // `null` tant que l'analyse n'a rien écrit : on attend le tour suivant.
+          if (!r || r.generatedAt === precedent) return;
           this.arreterSondage();
           this.rapport.set(r);
           this.analyseEnCours.set(false);
@@ -1414,8 +1415,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
             `Analyse terminée : ${r.setsFromVideo} set(s) calés sur la vidéo sur ${r.setsTotal}.`,
           );
         },
-        // 404 tant qu'aucun rapport n'existe : c'est le cas nominal au début.
-        error: () => { /* on réessaie au prochain tour */ },
+        error: () => { /* incident réseau : on réessaie au prochain tour */ },
       });
       if (essais > 120) {
         this.arreterSondage();
@@ -1453,7 +1453,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
     });
   }
 
-  /** Rapport déjà calculé, s'il existe. 404 attendu quand il n'y en a pas. */
+  /** Rapport déjà calculé, s'il existe. L'API renvoie `null` sinon. */
   private chargerRapportExistant(vodId: string) {
     this.api.getAlignment(vodId).subscribe({
       next: (r) => this.rapport.set(r),

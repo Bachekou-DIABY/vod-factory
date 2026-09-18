@@ -80,16 +80,16 @@ export class VodAlignmentController {
     };
   }
 
-  /** Renvoie le dernier rapport d'alignement calculé pour cette VOD. */
+  /**
+   * Renvoie le dernier rapport d'alignement, ou `null` s'il n'y en a pas.
+   *
+   * Pas de 404 : une VOD sans analyse est un état normal, pas une erreur. La
+   * renvoyer en 404 faisait remonter des erreurs dans la console du navigateur
+   * à chaque ouverture de page. Une VOD inexistante, elle, reste une 404.
+   */
   @Get(':id/alignment')
   async getAlignment(@Param('id') id: string) {
-    const report = await this.alignVodSets.getReport(id);
-    if (!report) {
-      throw new NotFoundException(
-        'Aucun alignement pour cette VOD. Lancez POST /vods/:id/align.',
-      );
-    }
-    return report;
+    return this.alignVodSets.getReport(id);
   }
 
   /** Génère les clips à partir du rapport, en écartant les sets peu sûrs. */

@@ -1,6 +1,6 @@
 import { ExpectedSet, GameCandidate } from '../../domain/alignment/alignment.types';
 import { AlignerOptions, DEFAULT_ALIGNER_OPTIONS, alignSets } from './set-aligner';
-import { estimateBias } from './offset-estimator';
+import { DEFAULT_OFFSET_OPTIONS, estimateBias } from './offset-estimator';
 import { DEFAULT_SEGMENTER_OPTIONS, adaptiveDarkThreshold, segment } from './segmenter';
 import { filterSetsToVodWindow } from './vod-window';
 
@@ -153,6 +153,32 @@ describe('estimateBias', () => {
     expect(estimate.biasSeconds).toBe(trueOffset);
     expect(estimate.confidence).toBeGreaterThan(0.5);
     expect(estimate.setsUsed).toBe(4);
+  });
+
+  it('retrouve un décalage de quinze minutes sans saturer', () => {
+    // Cas réel, L'Oracle : le TO lance ses sets avec environ 17 minutes
+    // d'avance. L'ancienne fenêtre de 900 s butait sur sa borne et renvoyait
+    // exactement -900, valeur fausse et reconnaissable.
+    const trueOffset = -1020;
+    const sets = [
+      makeSet(1, 2, 2000, 2900),
+      makeSet(2, 2, 5000, 5900),
+      makeSet(3, 2, 8000, 8900),
+      makeSet(4, 2, 11000, 11900),
+      makeSet(5, 2, 14000, 14900),
+    ];
+    const candidates: GameCandidate[] = sets.map((s) => ({
+      startSeconds: s.apiStartUnix! - RECORDED_AT + trueOffset,
+      endSeconds: s.apiEndUnix! - RECORDED_AT + trueOffset,
+      confidence: 0.9,
+      snappedToBlack: true,
+      ocrConfirmed: null,
+    }));
+
+    const estimate = estimateBias(candidates, sets, RECORDED_AT, 20_000);
+
+    expect(estimate.biasSeconds).toBe(trueOffset);
+    expect(Math.abs(estimate.biasSeconds)).toBeLessThan(DEFAULT_OFFSET_OPTIONS.maxLagSeconds);
   });
 
   it('renvoie un biais nul quand trop peu de sets ont des timestamps', () => {

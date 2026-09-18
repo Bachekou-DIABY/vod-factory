@@ -265,8 +265,9 @@ export class ApiService {
     return this.http.post<{ jobId: string; message: string }>(`${this.base}/vods/${vodId}/align`, body);
   }
 
-  getAlignment(vodId: string): Observable<AlignmentReport> {
-    return this.http.get<AlignmentReport>(`${this.base}/vods/${vodId}/alignment`);
+  /** `null` quand la VOD n'a pas encore été analysée : c'est un état normal. */
+  getAlignment(vodId: string): Observable<AlignmentReport | null> {
+    return this.http.get<AlignmentReport | null>(`${this.base}/vods/${vodId}/alignment`);
   }
 
   generateClipsFromAlignment(

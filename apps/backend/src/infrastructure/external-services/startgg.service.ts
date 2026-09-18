@@ -250,7 +250,9 @@ export class StartGGService implements IStartGGService {
               streamName.trim().toLowerCase())
       );
 
-      filtered.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+      // Même repli que plus haut : l'ordre prime sur la présence d'une heure de début.
+      const rang = (s: StartGGSetNode) => s.startedAt ?? s.completedAt ?? 0;
+      filtered.sort((a, b) => rang(a) - rang(b));
 
       return filtered.map((s) => ({
         id: s.id.toString(),
@@ -293,7 +295,11 @@ export class StartGGService implements IStartGGService {
       (s) => s.slots?.length === 2 && s.slots[0].entrant && s.slots[1].entrant &&
         (!wanted || s.stream?.streamName?.trim().toLowerCase() === wanted),
     );
-    valid.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+    // Le repli sur `completedAt` est indispensable : un set reporté sans heure de
+    // début se retrouverait sinon en tête de séquence, et l'alignement monotone
+    // lui attribuerait les premières games de la VOD, sous un faux titre.
+    const rang = (s: StartGGSetNode) => s.startedAt ?? s.completedAt ?? 0;
+    valid.sort((a, b) => rang(a) - rang(b));
     return valid.map((s) => ({
       id: s.id.toString(),
       roundName: s.fullRoundText,

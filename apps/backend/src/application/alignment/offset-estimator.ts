@@ -32,7 +32,10 @@ export interface OffsetEstimatorOptions {
 }
 
 export const DEFAULT_OFFSET_OPTIONS: OffsetEstimatorOptions = {
-  maxLagSeconds: 900,
+  // Trente minutes. Mesuré à un quart d'heure sur L'Oracle, où l'estimateur
+  // butait sur l'ancienne borne de 900 s et renvoyait donc une valeur fausse.
+  // Un estimateur qui rend exactement sa borne est un estimateur saturé.
+  maxLagSeconds: 1800,
   stepSeconds: 1,
   minSetsWithTimes: 3,
 };
