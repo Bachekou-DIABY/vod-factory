@@ -116,8 +116,28 @@ function normaliser(texte: string): string {
           </div>
         }
 
+        <!-- Génération des clips en cours -->
+        @if (generationLancee()) {
+          <div class="mb-6 bg-purple-950 border border-purple-700 rounded-xl p-5 max-w-4xl">
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <div class="flex items-center gap-3">
+                <div class="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin shrink-0"></div>
+                <p class="text-sm font-medium text-purple-100">Génération des clips…</p>
+              </div>
+              <span class="text-sm font-mono text-purple-300">{{ clipsGeneres() }} / {{ clipsAttendus() }}</span>
+            </div>
+            <p class="text-xs text-purple-400 leading-relaxed mb-3">
+              Les clips apparaissent au fur et à mesure en bas de page. Inutile de rafraîchir.
+            </p>
+            <div class="h-2 bg-purple-900 rounded-full overflow-hidden">
+              <div class="h-2 bg-purple-400 rounded-full transition-all duration-500"
+                [style.width]="progressionClips() + '%'"></div>
+            </div>
+          </div>
+        }
+
         <!-- Conversion panel (remux in progress) -->
-        @if (v.status === 'PROCESSING' && clips().length === 0) {
+        @if (!generationLancee() && v.status === 'PROCESSING' && clips().length === 0) {
           <div class="mb-6 bg-gray-900 border border-gray-700 rounded-xl p-5 max-w-4xl">
             <div class="flex items-center gap-3 mb-2">
               <div class="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
@@ -135,7 +155,7 @@ function normaliser(texte: string): string {
         }
 
         <!-- Video player -->
-        @if (v.filePath && !(v.status === 'PROCESSING' && clips().length === 0)) {
+        @if (v.filePath && !(!generationLancee() && v.status === 'PROCESSING' && clips().length === 0)) {
           <video
             #vodVideoEl
             class="w-full max-w-4xl rounded-xl mb-4 bg-black"
@@ -737,6 +757,24 @@ export class VodDetailPage implements OnInit, OnDestroy {
 
   showAdvancedTimestamp = signal(false);
 
+  // Suivi de la génération des clips. `clipsAuDebut` sert de référence : lors
+  // d'un redécoupage, des clips existent déjà et la progression doit compter
+  // ceux de ce lot, pas le total en base.
+  clipsAttendus = signal(0);
+  clipsAuDebut = signal(0);
+
+  generationLancee = computed(() => this.clipsAttendus() > 0);
+  clipsGeneres = computed(() =>
+    Math.min(
+      this.clipsAttendus(),
+      Math.max(0, this.clips().length - this.clipsAuDebut()),
+    ),
+  );
+  progressionClips = computed(() => {
+    const cible = this.clipsAttendus();
+    return cible > 0 ? Math.round((this.clipsGeneres() / cible) * 100) : 0;
+  });
+
   showImportSets = signal(false);
   importRecordedAt = 0;
   calibrationSets = signal<StartGGSetPreview[]>([]);
@@ -878,6 +916,7 @@ export class VodDetailPage implements OnInit, OnDestroy {
           }
           if (!['DOWNLOADING', 'PROCESSING'].includes(v.status)) {
             this.downloadProgress.set(null);
+            this.clipsAttendus.set(0);
             this.stopPolling();
             this.api.getClips(id).subscribe((c) => {
               this.clips.set(c);
@@ -1345,7 +1384,13 @@ export class VodDetailPage implements OnInit, OnDestroy {
       next: (res) => {
         this.generationEnCours.set(false);
         this.analyseMsg.set(res.message);
-        setTimeout(() => this.api.getClips(v.id).subscribe(c => this.clips.set(c)), 2000);
+        const attendus = res.enqueuedSets ?? 0;
+        if (attendus > 0) {
+          this.clipsAuDebut.set(this.clips().length);
+          this.clipsAttendus.set(attendus);
+          this.vod.set({ ...v, status: 'PROCESSING' });
+          this.startPollingIfNeeded('PROCESSING', v.id);
+        }
       },
       error: (err) => {
         this.generationEnCours.set(false);

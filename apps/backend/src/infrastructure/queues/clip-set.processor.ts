@@ -1,6 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -36,6 +36,8 @@ export class ClipSetProcessor extends WorkerHost {
     private readonly clipRepository: IClipRepository,
     @Inject(VOD_REPOSITORY_TOKEN)
     private readonly vodRepository: IVodRepository,
+    @InjectQueue(CLIP_SET_QUEUE)
+    private readonly queue: Queue,
   ) {
     super();
   }
@@ -61,31 +63,72 @@ export class ClipSetProcessor extends WorkerHost {
     const midpoint = Math.floor((endSeconds - startSeconds) / 2);
     await this.extractThumbnail(result.outputPath, thumbnailPath, midpoint);
 
-    await this.clipRepository.create({
-      vodId,
-      setOrder,
-      setStartGGId,
-      filePath: result.outputPath,
-      startSeconds,
-      endSeconds,
-      title,
-      roundName,
-      players,
-      score,
-      thumbnailPath,
-      privacyStatus: 'unlisted',
-      status: 'PENDING',
-    });
+    // Un set déjà découpé est remplacé, pas dupliqué. Sans ça, chaque
+    // regénération ajoutait une ligne pointant sur le même fichier : 25 clips en
+    // base pour 22 sets, et autant d'uploads YouTube en double à la clé.
+    const existants = await this.clipRepository.findByVodId(vodId);
+    const deja = setStartGGId
+      ? existants.find((c) => c.setStartGGId === setStartGGId)
+      : undefined;
 
-    this.logger.log(`✅ [Job ${job.id}] Set ${setOrder} clipé: ${result.outputPath}`);
-
-    // Vérifier si tous les clips de cette VOD sont terminés
-    const clips = await this.clipRepository.findByVodId(vodId);
-    const vod = await this.vodRepository.findById(vodId);
-    if (vod && clips.length >= (job.data.totalSets ?? 1)) {
-      await this.vodRepository.update(vodId, { status: VodStatus.COMPLETED });
-      this.logger.log(`🏁 VOD ${vodId} COMPLETED (${clips.length} clips)`);
+    if (deja) {
+      if (deja.youtubeVideoId) {
+        this.logger.warn(
+          `⚠️ Set ${setOrder} redécoupé alors qu'il est déjà sur YouTube (${deja.youtubeVideoId}) : la vidéo en ligne ne correspond plus au fichier local.`,
+        );
+      }
+      // Le statut, la description et le lien YouTube sont conservés : ils
+      // portent du travail manuel que le redécoupage n'invalide pas.
+      await this.clipRepository.update(deja.id, {
+        filePath: result.outputPath,
+        startSeconds,
+        endSeconds,
+        title,
+        roundName,
+        players,
+        score,
+        thumbnailPath,
+      });
+      this.logger.log(`♻️ [Job ${job.id}] Set ${setOrder} remplacé: ${result.outputPath}`);
+    } else {
+      await this.clipRepository.create({
+        vodId,
+        setOrder,
+        setStartGGId,
+        filePath: result.outputPath,
+        startSeconds,
+        endSeconds,
+        title,
+        roundName,
+        players,
+        score,
+        thumbnailPath,
+        privacyStatus: 'unlisted',
+        status: 'PENDING',
+      });
+      this.logger.log(`✅ [Job ${job.id}] Set ${setOrder} clipé: ${result.outputPath}`);
     }
+
+    // La VOD n'est terminée que lorsque plus aucun job ne la concerne. Compter
+    // les clips ne suffit pas : après un redécoupage, leur nombre atteint la
+    // cible dès le premier job et la VOD basculait en COMPLETED trop tôt.
+    if (await this.plusAucunJobPour(vodId, job.id)) {
+      await this.vodRepository.update(vodId, { status: VodStatus.COMPLETED });
+      this.logger.log(`🏁 VOD ${vodId} COMPLETED`);
+    }
+  }
+
+  /** Reste-t-il des découpages en file pour cette VOD, hors celui en cours ? */
+  private async plusAucunJobPour(vodId: string, jobId?: string): Promise<boolean> {
+    const restants = await this.queue.getJobs([
+      'waiting',
+      'active',
+      'delayed',
+      'paused',
+    ]);
+    return !restants.some(
+      (j) => j && j.id !== jobId && (j.data as ClipSetJobData)?.vodId === vodId,
+    );
   }
 
   private extractThumbnail(inputPath: string, outputPath: string, seekSeconds: number): Promise<void> {
