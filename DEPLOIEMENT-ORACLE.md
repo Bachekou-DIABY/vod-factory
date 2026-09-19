@@ -355,13 +355,49 @@ sudo systemctl reload ssh    # reload, pas restart : la session en cours survit
 sudo sshd -T | grep -iE "maxstartups|logingracetime"
 ```
 
-### Si ça revient
+### Le port 22 est désormais restreint à une seule IP
 
-Le balayage n'a pas cessé, il a été rendu inoffensif. Dans l'ordre : installer
-`fail2ban` en pensant à se mettre en liste blanche, puis restreindre le port 22
-à son IP dans la Security List du VCN. Cette dernière option est la plus
-efficace mais enferme dehors si l'IP domestique change, et il faut alors passer
-par la console série Oracle.
+Fait le 19 septembre, après le réglage ci-dessus. La règle d'entrée TCP 22 de la
+Default Security List est passée de `0.0.0.0/0` à **`128.79.127.87/32`**, l'IP
+domestique. Les règles 80 et 443 restent ouvertes à tous, évidemment.
+
+Le gain n'est pas contre le bruteforce, qui ne pouvait pas aboutir puisque
+`PasswordAuthentication` est à `no`. Il est contre une faille
+**pré-authentification** dans sshd lui-même, dont `regreSSHion` (CVE-2024-6387)
+a montré en 2024 que ça n'a rien de théorique : exécution de code à distance
+sans aucun identifiant. Contre ce genre de faille, ni la clé ni le mot de passe
+ne protègent, seul le fait de ne pas être joignable protège.
+
+**Toujours filtrer au niveau du VCN, jamais en iptables.** C'est ce qui rend
+l'opération réversible : la Security List s'édite depuis la console web, sans
+aucun accès SSH. Une règle iptables, elle, ne se modifie que par SSH, donc une
+erreur y enferme réellement dehors. Les deux couches existent, on ne touche
+qu'à la récupérable.
+
+#### Le jour où l'IP Orange change
+
+Le symptôme sera un `ssh` qui ne répond plus, en `Connection timed out` cette
+fois puisque les paquets sont jetés en amont, et non plus `Connection closed`.
+C'est le piège à six mois : on ne fait pas le lien.
+
+Console web → vérifier la région **France Southeast (Marseille)** → Networking
+→ Virtual Cloud Networks → `vcn-20260316-0214` → Resources → Security Lists →
+`Default Security List` → onglet Ingress Rules → la ligne TCP port 22 → ⋮ →
+Edit → nouveau CIDR en `/32` → Save. Ne jamais cocher **Stateless** : une règle
+sans état n'autorise pas le trafic retour et casse la connexion.
+
+Pour connaître sa nouvelle IP : depuis une session SSH encore ouverte,
+`echo $SSH_CLIENT | cut -d" " -f1`, sinon n'importe quel site du type
+« what is my IP ».
+
+Le même chemin sert à tout rouvrir en `0.0.0.0/0` en cas de doute, ou à
+autoriser temporairement une autre adresse avant un déplacement.
+
+### Si ça revient malgré tout
+
+Reste `fail2ban`, en pensant à se mettre en liste blanche pour ne pas se bannir
+soi-même. Peu probable désormais : avec le port fermé, les scanners n'atteignent
+plus sshd du tout.
 
 ---
 
