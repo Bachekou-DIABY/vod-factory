@@ -323,31 +323,6 @@ function normaliser(texte: string): string {
           </div>
         }
 
-        <!-- Auto-generate banner (Twitch: timestamp auto-fetched + event linked + no clips yet) -->
-        @if (showAutoGenerateBanner()) {
-          <div class="mb-6 bg-purple-950 border border-purple-700 rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <p class="text-sm font-medium text-purple-200">⚡ Timestamp détecté automatiquement</p>
-              <p class="text-xs text-purple-400 mt-0.5">Le début du stream a été récupéré depuis l'URL. Tu peux générer les clips Start.gg directement.</p>
-            </div>
-            <div class="flex gap-2 shrink-0">
-              <button
-                (click)="autoGenerateClips()"
-                [disabled]="autoGenerating()"
-                class="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
-              >
-                {{ autoGenerating() ? 'Génération...' : '⚡ Générer les clips' }}
-              </button>
-              <button
-                (click)="dismissAutoGenerate()"
-                class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium text-gray-400 transition-colors"
-              >
-                Configurer manuellement
-              </button>
-            </div>
-          </div>
-        }
-
         <!-- Actions de découpage -->
         <div class="flex gap-3 mb-6 flex-wrap items-center">
           <button
@@ -362,7 +337,7 @@ function normaliser(texte: string): string {
             (click)="openImportSets()"
             class="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium transition-colors"
           >
-            Calibrer / import simple
+            📍 Calibrer le début du stream
           </button>
           @if (!vod()?.recordedAt) {
             <span class="text-xs text-amber-500">Calibre le début du stream avant d'analyser.</span>
@@ -448,16 +423,16 @@ function normaliser(texte: string): string {
           </div>
         }
 
-        <!-- Import sets form -->
+        <!-- Calibrage du début du stream -->
         @if (showImportSets()) {
           <div class="mb-8 bg-gray-900 border border-gray-700 rounded-xl p-5">
-            <h2 class="text-sm font-semibold text-gray-300 mb-4">Importer les sets depuis Start.gg</h2>
+            <h2 class="text-sm font-semibold text-gray-300 mb-4">Calibrer le début du stream</h2>
             <div class="bg-gray-800 rounded-lg p-4 mb-4 text-sm text-gray-300 leading-relaxed">
-              <p class="font-medium text-white mb-2">Comment ça marche ?</p>
+              <p class="font-medium text-white mb-2">À quoi ça sert ?</p>
               <ul class="space-y-1 text-gray-400 list-disc list-inside">
-                <li>Le système récupère les timestamps de chaque set sur Start.gg</li>
-                <li>Il calcule la position de chaque set dans ta VOD et génère les clips automatiquement</li>
-                <li>Si les clips sont décalés, renseigne l'heure de début du stream ci-dessous</li>
+                <li>L'analyse a besoin de savoir à quelle heure réelle commence la vidéo</li>
+                <li>Repose-toi sur un set que tu reconnais : place-toi dessus dans le lecteur, puis clique</li>
+                <li>Une fois calibré, lance « Analyser la vidéo »</li>
               </ul>
             </div>
             <div class="grid grid-cols-2 gap-3 mb-4">
@@ -564,42 +539,6 @@ function normaliser(texte: string): string {
                   <p class="text-green-400 text-xs mt-1">{{ calibrationMsg() }}</p>
                 }
               </div>
-              <div>
-                <label class="block text-xs text-gray-400 mb-1">
-                  Marge avant chaque set
-                  <span class="text-gray-600 ml-1">(secondes ajoutées avant le début)</span>
-                </label>
-                <input
-                  type="number"
-                  [(ngModel)]="importPreBuffer"
-                  placeholder="30"
-                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                />
-              </div>
-              <div>
-                <label class="block text-xs text-gray-400 mb-1">
-                  Marge après chaque set
-                  <span class="text-gray-600 ml-1">(secondes ajoutées après la fin)</span>
-                </label>
-                <input
-                  type="number"
-                  [(ngModel)]="importPostBuffer"
-                  placeholder="30"
-                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                />
-              </div>
-            </div>
-            <div class="flex gap-3 items-center">
-              <button
-                (click)="importSets()"
-                [disabled]="importingSets()"
-                class="px-5 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
-              >
-                {{ importingSets() ? 'Import en cours...' : 'Importer' }}
-              </button>
-              @if (importMsg()) {
-                <span class="text-sm" [class]="importSuccess() ? 'text-green-400' : 'text-red-400'">{{ importMsg() }}</span>
-              }
             </div>
           </div>
         }
@@ -797,20 +736,8 @@ export class VodDetailPage implements OnInit, OnDestroy {
   private clipRecutDragging: 'start' | 'end' | null = null;
 
   showAdvancedTimestamp = signal(false);
-  showAutoGenerateBannerDismissed = signal(false);
-  autoGenerating = signal(false);
-
-  showAutoGenerateBanner = computed(() => {
-    const v = this.vod();
-    if (!v || !v.recordedAt || !v.eventStartGGId) return false;
-    if (this.showAutoGenerateBannerDismissed()) return false;
-    if (this.clips().length > 0) return false;
-    if (['DOWNLOADING', 'PROCESSING', 'PENDING'].includes(v.status)) return false;
-    return true;
-  });
 
   showImportSets = signal(false);
-  importingSets = signal(false);
   importRecordedAt = 0;
   calibrationSets = signal<StartGGSetPreview[]>([]);
   loadingCalibrationSets = signal(false);
@@ -828,10 +755,6 @@ export class VodDetailPage implements OnInit, OnDestroy {
   minConfiance = 0.45;
   private sondageAnalyse: ReturnType<typeof setInterval> | null = null;
   calibrationMsg = signal('');
-  importPreBuffer = 30;
-  importPostBuffer = 30;
-  importMsg = signal('');
-  importSuccess = signal(false);
 
   // Manual clip
   vodDuration = signal(0);
@@ -1229,27 +1152,6 @@ export class VodDetailPage implements OnInit, OnDestroy {
     }
   }
 
-  dismissAutoGenerate() {
-    this.showAutoGenerateBannerDismissed.set(true);
-    this.showImportSets.set(true);
-  }
-
-  autoGenerateClips() {
-    const v = this.vod();
-    if (!v || !v.recordedAt) return;
-    this.autoGenerating.set(true);
-    const ts = Math.floor(new Date(v.recordedAt).getTime() / 1000);
-    this.api.generateClips(v.id, { vodRecordedAtUnix: ts }).subscribe({
-      next: () => {
-        this.autoGenerating.set(false);
-        this.showAutoGenerateBannerDismissed.set(true);
-        this.vod.set({ ...v, status: 'PROCESSING' });
-        this.startPollingIfNeeded('PROCESSING', v.id);
-      },
-      error: () => this.autoGenerating.set(false),
-    });
-  }
-
   estimateFromSets() {
     const eventId = this.vod()?.eventStartGGId;
     if (!eventId) return;
@@ -1527,32 +1429,6 @@ export class VodDetailPage implements OnInit, OnDestroy {
         this.calibrationMsg.set(
           "⚠ Calage calculé mais non enregistré. Réessaie avant de lancer l'analyse.",
         ),
-    });
-  }
-
-  importSets() {
-    const v = this.vod();
-    if (!v) return;
-    this.importingSets.set(true);
-    this.importMsg.set('');
-    const body: any = {};
-    if (this.importRecordedAt) body.vodRecordedAtUnix = this.importRecordedAt;
-    if (this.importPreBuffer !== 30) body.preBufferSeconds = this.importPreBuffer;
-    if (this.importPostBuffer !== 30) body.postBufferSeconds = this.importPostBuffer;
-    this.api.generateClips(v.id, body).subscribe({
-      next: (res) => {
-        this.importingSets.set(false);
-        this.importSuccess.set(true);
-        this.importMsg.set('✓ ' + (res.enqueuedSets ?? 0) + ' clips en file');
-        this.showImportSets.set(false);
-        this.vod.set({ ...v, status: 'PROCESSING' });
-        this.startPollingIfNeeded('PROCESSING', v.id);
-      },
-      error: (err) => {
-        this.importingSets.set(false);
-        this.importSuccess.set(false);
-        this.importMsg.set(err?.error?.message ?? 'Erreur');
-      },
     });
   }
 
