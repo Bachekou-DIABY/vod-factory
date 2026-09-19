@@ -47,8 +47,25 @@ export interface SegmenterOptions {
   /** Bornes du seuil adaptatif, pour qu'il reste plausible sur un signal atypique. */
   darkThresholdMin: number;
   darkThresholdMax: number;
-  /** Fenêtre de recherche du fondu au noir précédant un début de game. */
+  /**
+   * Fenêtre de recherche du fondu au noir précédant un début de game.
+   *
+   * Volontairement courte. Trop large, la recherche saute par-dessus un
+   * character select entier pour atteindre le fondu qui le précède, et le clip
+   * démarre une minute avant le set. L'intro de stage à rattraper dure quelques
+   * secondes, pas une demi-minute.
+   */
   blackLookbackSeconds: number;
+  /**
+   * Durée maximale du fondu sur lequel on recale, en secondes.
+   *
+   * Sans cette borne, la remontée ne s'arrête qu'à `blackLookbackSeconds` : une
+   * game précédée d'une intermission sombre voyait son début reculé de tout le
+   * lookback, et le clip s'ouvrait une minute avant le set. Un fondu dure
+   * quelques secondes ; au-delà, ce n'est plus un fondu mais un écran d'attente,
+   * et on ne garde que sa fin.
+   */
+  maxFadeSeconds: number;
   /** Fenêtre de recherche du fondu au noir suivant une fin de game. */
   blackLookaheadSeconds: number;
 }
@@ -63,7 +80,8 @@ export const DEFAULT_SEGMENTER_OPTIONS: SegmenterOptions = {
   darkThreshold: 'auto',
   darkThresholdMin: 0.2,
   darkThresholdMax: 0.9,
-  blackLookbackSeconds: 40,
+  blackLookbackSeconds: 20,
+  maxFadeSeconds: 8,
   blackLookaheadSeconds: 10,
 };
 
@@ -175,6 +193,7 @@ function snapStartToBlack(
   dark: Float32Array,
   darkThreshold: number,
   lookback: number,
+  maxFade: number,
 ): { index: number; snapped: boolean } {
   const floor = Math.max(0, index - lookback);
 
@@ -187,9 +206,11 @@ function snapStartToBlack(
   }
   if (lastDark < 0) return { index, snapped: false };
 
-  // Remonter au premier échantillon du fondu, pas au dernier.
+  // Remonter au premier échantillon du fondu, pas au dernier, mais sans jamais
+  // dépasser la durée d'un fondu : au-delà, on remonterait dans l'intermission.
+  const limite = Math.max(floor, lastDark - maxFade);
   let start = lastDark;
-  while (start - 1 >= floor && dark[start - 1] >= darkThreshold) start--;
+  while (start - 1 >= limite && dark[start - 1] >= darkThreshold) start--;
 
   return { index: start, snapped: true };
 }
@@ -263,6 +284,7 @@ export function segment(
       dark,
       darkThreshold,
       lookback,
+      toSamples(options.maxFadeSeconds),
     );
     const snappedEnd = snapEndToBlack(
       interval.to,
