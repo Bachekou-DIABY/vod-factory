@@ -37,6 +37,7 @@ import { filterSetsToVodWindow } from '../alignment/vod-window';
 import { splitToMatchCount } from '../alignment/game-splitter';
 import {
   DEFAULT_CLIP_BOUNDS_OPTIONS,
+  clampToNextClip,
   trimDeadPreRoll,
 } from '../alignment/clip-bounds';
 import {
@@ -217,6 +218,7 @@ export class AlignVodSetsUseCase {
         // ne doit jamais rallonger le clip.
         preRollSeconds: alignerOptions.preRollSeconds,
       });
+      aligned = clampToNextClip(aligned);
       const recalés = aligned.filter((a, i) => a.startSeconds !== avant[i].startSeconds);
       if (recalés.length > 0) {
         this.logger.log(

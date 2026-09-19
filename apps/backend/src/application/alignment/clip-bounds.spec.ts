@@ -5,6 +5,7 @@ import {
 } from '../../domain/alignment/alignment.types';
 import {
   DEFAULT_CLIP_BOUNDS_OPTIONS,
+  clampToNextClip,
   inGameDarkness,
   preRollBefore,
   trimDeadPreRoll,
@@ -144,5 +145,47 @@ describe('trimDeadPreRoll', () => {
     const aligned = [alignedSet([], 100)];
 
     expect(trimDeadPreRoll(signal(1000, []), aligned)).toBe(aligned);
+  });
+});
+
+describe('clampToNextClip', () => {
+  it('raccourcit un clip qui déborde sur le suivant', () => {
+    // Cas réel, Play Sorbonne : la Grande Finale et son reset enchaînent, et
+    // les 20 s de post-roll mordaient sur le clip du reset.
+    const a = alignedSet([game(100, 300)], 75);
+    a.endSeconds = 320;
+    const b = alignedSet([game(330, 500)], 310);
+
+    const [premier, second] = clampToNextClip([a, b]);
+
+    expect(premier.endSeconds).toBe(310);
+    expect(second).toBe(b);
+  });
+
+  it('ne tronque jamais la dernière game', () => {
+    // Le clip suivant commence avant la fin de la dernière game : on s'arrête
+    // à cette fin plutôt que de couper du jeu.
+    const a = alignedSet([game(100, 300)], 75);
+    a.endSeconds = 320;
+    const b = alignedSet([game(310, 500)], 290);
+
+    expect(clampToNextClip([a, b])[0].endSeconds).toBe(300);
+  });
+
+  it('ne touche pas à des clips qui ne se recouvrent pas', () => {
+    const a = alignedSet([game(100, 300)], 75);
+    const b = alignedSet([game(500, 700)], 475);
+
+    const resultat = clampToNextClip([a, b]);
+
+    expect(resultat[0]).toBe(a);
+    expect(resultat[1]).toBe(b);
+  });
+
+  it('ignore les sets sans game', () => {
+    const vide = alignedSet([], 100);
+    const b = alignedSet([game(100, 300)], 75);
+
+    expect(clampToNextClip([vide, b])[0]).toBe(vide);
   });
 });

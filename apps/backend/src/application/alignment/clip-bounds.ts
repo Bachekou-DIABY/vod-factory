@@ -160,3 +160,35 @@ export function trimDeadPreRoll(
     return startSeconds === set.startSeconds ? set : { ...set, startSeconds };
   });
 }
+
+/**
+ * Empêche un clip de déborder sur le suivant.
+ *
+ * Le post-roll est une constante. Quand deux sets s'enchaînent sans pause,
+ * comme une Grande Finale et son reset lancé quatre secondes plus tard, ces
+ * vingt secondes mordent sur le début du set suivant et les deux clips se
+ * recouvrent.
+ *
+ * Rien n'est perdu en raccourcissant : le clip suivant commence avec son propre
+ * pré-roll, donc la transition s'y trouve déjà. On ne coupe pas du contenu, on
+ * décide à qui il appartient. La borne ne descend jamais sous la fin de la
+ * dernière game, pour qu'aucune game ne soit tronquée.
+ */
+export function clampToNextClip(aligned: AlignedSet[]): AlignedSet[] {
+  const resultat = [...aligned];
+
+  for (let i = 0; i < resultat.length - 1; i++) {
+    const courant = resultat[i];
+    const suivant = resultat[i + 1];
+    if (courant.games.length === 0 || suivant.games.length === 0) continue;
+    if (courant.endSeconds <= suivant.startSeconds) continue;
+
+    const finDerniereGame = courant.games[courant.games.length - 1].endSeconds;
+    const borne = Math.max(finDerniereGame, suivant.startSeconds);
+    if (borne >= courant.endSeconds) continue;
+
+    resultat[i] = { ...courant, endSeconds: borne };
+  }
+
+  return resultat;
+}
