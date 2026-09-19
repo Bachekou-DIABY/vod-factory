@@ -5,6 +5,7 @@ import { gql } from 'graphql-tag';
 import { print } from 'graphql';
 import { IStartGGService, StartGGEventResponse, StartGGSetResponse, StartGGTournamentSearchResult } from '../../domain/services/startgg.service.interface';
 import { Tournament } from '../../domain/entities/tournament.entity';
+import { recoverBracketResets } from '../../application/alignment/stream-recovery';
 
 /**
  * Pages de sets récupérées en parallèle. Start.gg plafonne à 80 requêtes par
@@ -291,10 +292,35 @@ export class StartGGService implements IStartGGService {
     // deux côtés, sinon un " Etoiles " ne correspond à rien et l'appelant
     // reçoit zéro set sans savoir pourquoi.
     const wanted = streamName?.trim().toLowerCase();
-    const valid = allSets.filter(
-      (s) => s.slots?.length === 2 && s.slots[0].entrant && s.slots[1].entrant &&
-        (!wanted || s.stream?.streamName?.trim().toLowerCase() === wanted),
+    const jouables = allSets.filter(
+      (s) => s.slots?.length === 2 && s.slots[0].entrant && s.slots[1].entrant,
     );
+    const valid = jouables.filter(
+      (s) => !wanted || s.stream?.streamName?.trim().toLowerCase() === wanted,
+    );
+
+    // Rattrape les bracket resets, créés après coup et rarement rattachés à la
+    // chaîne. Sans ça, la vraie finale est perdue et la Grande Finale hérite de
+    // games qui ne sont pas les siennes.
+    if (wanted) {
+      const resets = recoverBracketResets(jouables, valid, (n) => ({
+        entrantIds: [
+          n.slots[0].entrant!.id.toString(),
+          n.slots[1].entrant!.id.toString(),
+        ],
+        hasStream: Boolean(n.stream),
+        startedAt: n.startedAt,
+        completedAt: n.completedAt,
+      }));
+      if (resets.length > 0) {
+        this.logger.log(
+          `↩️ ${resets.length} set(s) non rattaché(s) à la chaîne récupéré(s) : ${resets
+            .map((r) => r.fullRoundText)
+            .join(', ')}`,
+        );
+        valid.push(...resets);
+      }
+    }
     // Le repli sur `completedAt` est indispensable : un set reporté sans heure de
     // début se retrouverait sinon en tête de séquence, et l'alignement monotone
     // lui attribuerait les premières games de la VOD, sous un faux titre.
