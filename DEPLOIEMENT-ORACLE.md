@@ -300,6 +300,71 @@ même tenancy.
 
 ---
 
+## SSH injoignable : « Connection closed by ... port 22 »
+
+Symptôme rencontré le 19 septembre. `ssh vod-factory` échouait une fois sur
+deux, sans message utile. Le diagnostic tient dans la bannière, que seul le
+mode verbeux montre :
+
+```bash
+ssh -vv vod-factory
+# debug1: kex_exchange_identification: banner line 0: Exceeded MaxStartups
+```
+
+**Ne pas confondre les trois échecs.** `Connection timed out` est un pare-feu
+qui jette les paquets, `Connection refused` est un port sans service, et
+`Connection closed` signifie que le TCP passe et que sshd raccroche
+volontairement. Ici la machine allait parfaitement bien : l'API HTTPS répondait
+en 93 ms et la charge était à 0,08.
+
+`MaxStartups` limite les connexions **non encore authentifiées**. Le port 22
+étant exposé publiquement, il reçoit en permanence du balayage automatisé :
+3 713 échecs d'authentification en 24 h, 18 connexions établies. Les bots
+ouvraient des connexions et les laissaient traîner jusqu'à `LoginGraceTime`,
+soit deux minutes, ce qui suffisait à occuper les dix créneaux par défaut.
+
+Le risque était de **disponibilité, pas de sécurité** : `PasswordAuthentication`
+est à `no`, donc ces tentatives ne pouvaient pas aboutir, seulement encombrer.
+
+### Le réglage appliqué
+
+Dans `/etc/ssh/sshd_config.d/10-anti-scan.conf`, jamais dans `sshd_config`, pour
+survivre aux mises à jour du paquet :
+
+```
+MaxStartups 30:40:150
+PerSourceMaxStartups 3
+PerSourceNetBlockSize 32:128
+LoginGraceTime 30
+```
+
+Les deux lignes qui comptent sont `PerSourceMaxStartups`, qui empêche une même
+IP de monopoliser le pool, et `LoginGraceTime`, qui libère quatre fois plus vite
+le créneau d'une connexion qui ne s'authentifie jamais.
+
+Résultat : de une connexion sur deux en échec à huit sur huit.
+
+### Toujours valider avant de recharger
+
+Une erreur dans cette configuration enferme dehors. La séquence sûre, en
+gardant une session ouverte à côté :
+
+```bash
+sudo sshd -t || sudo rm -f /etc/ssh/sshd_config.d/10-anti-scan.conf
+sudo systemctl reload ssh    # reload, pas restart : la session en cours survit
+sudo sshd -T | grep -iE "maxstartups|logingracetime"
+```
+
+### Si ça revient
+
+Le balayage n'a pas cessé, il a été rendu inoffensif. Dans l'ordre : installer
+`fail2ban` en pensant à se mettre en liste blanche, puis restreindre le port 22
+à son IP dans la Security List du VCN. Cette dernière option est la plus
+efficace mais enferme dehors si l'IP domestique change, et il faut alors passer
+par la console série Oracle.
+
+---
+
 ## Vérifications de routine
 
 Où pointent réellement les domaines :
@@ -316,6 +381,12 @@ $oci = "$env:USERPROFILE\.oci-cli-venv\Scripts\oci.exe"
 $t = ((Get-Content "$env:USERPROFILE\.oci\config" | Select-String '^tenancy').Line -split '=',2)[1].Trim()
 & $oci network public-ip list --compartment-id $t --scope REGION
 & $oci compute instance list --compartment-id $t --output table
+```
+
+Santé du port 22, si les connexions redeviennent capricieuses :
+
+```bash
+ssh vod-factory 'sudo journalctl -u ssh --since "24 hours ago" --no-pager | grep -ciE "failed password|invalid user|preauth"'
 ```
 
 Consommation disque face au quota de 200 Go :
