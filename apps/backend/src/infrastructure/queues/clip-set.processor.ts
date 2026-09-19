@@ -134,6 +134,9 @@ export class ClipSetProcessor extends WorkerHost {
   private extractThumbnail(inputPath: string, outputPath: string, seekSeconds: number): Promise<void> {
     return new Promise((resolve) => {
       const proc = spawn('ffmpeg', [
+        '-nostdin',
+        '-hide_banner',
+        '-loglevel', 'error',
         '-ss', String(Math.max(0, seekSeconds)),
         '-i', inputPath,
         '-vframes', '1',
@@ -141,6 +144,10 @@ export class ClipSetProcessor extends WorkerHost {
         '-y',
         outputPath,
       ]);
+      // Même précaution qu'au remux : un tube stderr jamais lu finit par bloquer
+      // ffmpeg. Une frame unique n'en produit que quelques kilo-octets, mais on
+      // ne laisse pas dépendre la robustesse d'un volume de logs.
+      proc.stderr.on('data', () => undefined);
       proc.on('close', (code) => {
         if (code !== 0) this.logger.warn(`Thumbnail auto échouée pour ${inputPath}`);
         resolve(); // Ne pas bloquer le job si la thumbnail échoue

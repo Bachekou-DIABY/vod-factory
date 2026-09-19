@@ -113,6 +113,8 @@ export class VodDownloadProcessor extends WorkerHost {
 
     return new Promise((resolve) => {
       const proc = spawn('ffmpeg', [
+        '-nostdin',
+        '-hide_banner',
         '-i', inputPath,
         '-c:v', 'copy',
         '-c:a', 'copy',
@@ -121,13 +123,26 @@ export class VodDownloadProcessor extends WorkerHost {
         outputPath,
       ]);
 
+      // ffmpeg écrit sa progression sur stderr en continu. Si personne ne vide
+      // ce tube, il se remplit à 64 Ko et ffmpeg se bloque en écriture, pour
+      // toujours. C'est ce qui a figé le remux d'une VOD de 11 Go à mi-parcours,
+      // temps CPU à l'arrêt et job de téléchargement bloqué derrière.
+      // Le défaut ne pouvait apparaître qu'ici : les VODs uploadées passent par
+      // un autre remux, qui lui draine bien stderr.
+      let derniereSortie = '';
+      proc.stderr.on('data', (d: Buffer) => {
+        derniereSortie = d.toString().trim().slice(-400);
+      });
+
       proc.on('close', (code) => {
         if (code === 0 && fs.existsSync(outputPath)) {
           try { fs.unlinkSync(inputPath); } catch (_) { /* ignore */ }
           this.logger.log(`⚡ Faststart appliqué: ${path.basename(outputPath)}`);
           resolve(outputPath);
         } else {
-          this.logger.warn(`⚠️ Remux faststart échoué (code ${code}), fichier original conservé`);
+          this.logger.warn(
+            `⚠️ Remux faststart échoué (code ${code}), fichier original conservé${derniereSortie ? ` — ${derniereSortie}` : ''}`,
+          );
           resolve(inputPath);
         }
       });

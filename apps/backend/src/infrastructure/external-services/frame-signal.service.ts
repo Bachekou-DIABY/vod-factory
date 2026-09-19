@@ -230,6 +230,8 @@ export class FrameSignalService {
         '-y',
         outputPath,
       ]);
+      // Tube stderr vidé par principe : non lu, il finirait par bloquer ffmpeg.
+      proc.stderr.on('data', () => undefined);
       proc.on('error', () => resolve(false));
       proc.on('close', (code) => resolve(code === 0 && fs.existsSync(outputPath)));
     });
