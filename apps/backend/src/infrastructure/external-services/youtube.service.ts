@@ -14,6 +14,31 @@ const SCOPES = [
   'https://www.googleapis.com/auth/youtube',
 ];
 
+/**
+ * La chaîne a atteint son plafond de mises en ligne du jour.
+ *
+ * À ne pas confondre avec le quota du projet API, qui se demande dans la
+ * console Google et se compte en unités : celui-ci appartient à la chaîne
+ * YouTube, vaut une dizaine de vidéos tant qu'elle n'est pas vérifiée, et
+ * aucune augmentation de quota API ne le déplace.
+ */
+export class PlafondChaineAtteint extends Error {
+  constructor() {
+    super(
+      'La chaîne a atteint son nombre maximal de mises en ligne pour aujourd hui. ' +
+        'Vérifie la chaîne sur YouTube pour relever ce plafond, ou reprends demain.',
+    );
+    this.name = 'PlafondChaineAtteint';
+  }
+}
+
+/** Reconnaît la réponse de YouTube signalant ce plafond. */
+function estPlafondChaine(err: unknown): boolean {
+  const e = err as { message?: string; errors?: Array<{ reason?: string }> };
+  if (e?.errors?.some((x) => x.reason === 'uploadLimitExceeded')) return true;
+  return /exceeded the number of videos/i.test(e?.message ?? '');
+}
+
 @Injectable()
 export class YouTubeService {
   private readonly logger = new Logger(YouTubeService.name);
@@ -125,14 +150,20 @@ export class YouTubeService {
       },
     };
 
-    const res = await yt.videos.insert({
-      part: ['snippet', 'status'],
-      requestBody: resource,
-      media: {
-        mimeType: 'video/mp4',
-        body: fs.createReadStream(params.filePath),
-      },
-    });
+    let res;
+    try {
+      res = await yt.videos.insert({
+        part: ['snippet', 'status'],
+        requestBody: resource,
+        media: {
+          mimeType: 'video/mp4',
+          body: fs.createReadStream(params.filePath),
+        },
+      });
+    } catch (err) {
+      if (estPlafondChaine(err)) throw new PlafondChaineAtteint();
+      throw err;
+    }
 
     const videoId = res.data.id!;
     this.logger.log(`✅ Vidéo uploadée: https://youtu.be/${videoId}`);

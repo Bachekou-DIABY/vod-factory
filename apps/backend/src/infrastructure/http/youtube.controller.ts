@@ -14,7 +14,10 @@ import {
   Res,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { YouTubeService } from '../external-services/youtube.service';
+import {
+  PlafondChaineAtteint,
+  YouTubeService,
+} from '../external-services/youtube.service';
 import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositories/clip.repository.interface';
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
 import { ITournamentRepository } from '../../domain/repositories/tournament.repository.interface';
@@ -290,6 +293,16 @@ export class YouTubeController {
 
       await this.addToTournamentPlaylist(tournament, videoId, youtubeAccountId);
     } catch (err) {
+      // Le plafond de la chaine n est pas un echec du clip : il est intact et
+      // renvoyable tel quel demain. Le marquer FAILED laissait croire a douze
+      // clips casses alors que rien ne clochait chez eux.
+      if (err instanceof PlafondChaineAtteint) {
+        this.logger.warn(
+          `⏸ Upload clip ${clipId} repousse : ${err.message}`,
+        );
+        await this.clipRepository.update(clipId, { status: 'APPROVED' });
+        return;
+      }
       this.logger.error(`❌ Upload clip ${clipId} échoué: ${(err as Error).message}`);
       await this.clipRepository.update(clipId, { status: 'FAILED' });
     }

@@ -305,6 +305,70 @@ export class TournamentApprovedPage implements OnInit {
     });
   }
 
+  /**
+   * Envoie les clips un par un, en attendant la fin de chacun.
+   *
+   * En parallele, les vingt-deux envois heurtaient ensemble le plafond
+   * journalier de la chaine et repartaient tous en echec. En serie, seul le
+   * premier refuse s arrete, et les suivants restent envoyables.
+   */
+  private envoyerEnSerie(restants: Clip[], faits: number) {
+    const clip = restants[0];
+    if (!clip) {
+      this.uploadingAll.set(false);
+      this.uploadMsg.set(`${faits} clip(s) envoye(s).`);
+      return;
+    }
+
+    this.uploadMsg.set(
+      `Envoi ${faits + 1} sur ${faits + restants.length} : ${clip.title ?? clip.roundName ?? ''}`,
+    );
+
+    this.api
+      .uploadClipToYoutube(clip.id, {
+        title: clip.title ?? clip.roundName ?? `Set ${clip.setOrder}`,
+        description: clip.description ?? this.descriptionParDefaut(clip),
+        privacyStatus: this.clipPrivacy,
+      })
+      .subscribe({
+        next: () => {
+          this.clips.update((list) =>
+            list.map((c) => (c.id === clip.id ? { ...c, status: 'UPLOADING' } : c)),
+          );
+          this.attendreFin(clip.id, () =>
+            this.envoyerEnSerie(restants.slice(1), faits + 1),
+          );
+        },
+        error: (err) => {
+          this.uploadingAll.set(false);
+          this.uploadMsg.set(
+            `Arrete apres ${faits} envoi(s) : ${err.error?.message ?? err.message}`,
+          );
+        },
+      });
+  }
+
+  /** Attend qu un clip quitte l etat UPLOADING, puis enchaine. */
+  private attendreFin(clipId: string, suite: () => void) {
+    const timer = setInterval(() => {
+      this.api.getClip(clipId).subscribe((c) => {
+        if (c.status === 'UPLOADING') return;
+        clearInterval(timer);
+        this.clips.update((list) => list.map((x) => (x.id === clipId ? c : x)));
+        if (c.status === 'UPLOADED') {
+          suite();
+        } else {
+          // Statut revenu a APPROVED : plafond de la chaine atteint, inutile
+          // d insister, les suivants echoueraient pareil.
+          this.uploadingAll.set(false);
+          this.uploadMsg.set(
+            'Plafond de mises en ligne de la chaine atteint. Les clips restants sont intacts, reprends plus tard.',
+          );
+        }
+      });
+    }, 4000);
+  }
+
   uploadOne(clip: Clip, meta: { title: string; description: string; privacyStatus: string }) {
     // Optimistic UI
     this.clips.update(list => list.map(c => c.id === clip.id ? { ...c, status: 'UPLOADING' } : c));
@@ -351,14 +415,7 @@ export class TournamentApprovedPage implements OnInit {
     }).subscribe({
       next: (res) => {
         this.uploadMsg.set(`${res.created ? 'Playlist créée' : 'Playlist existante'} — Upload de ${uploadable.length} clips en cours...`);
-        uploadable.forEach((c) =>
-          this.uploadOne(c, {
-            title: c.title ?? c.roundName ?? `Set ${c.setOrder}`,
-            description: c.description ?? this.descriptionParDefaut(c),
-            privacyStatus: this.clipPrivacy,
-          }),
-        );
-        setTimeout(() => this.uploadingAll.set(false), 2000);
+        this.envoyerEnSerie(uploadable, 0);
       },
       error: (err) => {
         this.uploadingAll.set(false);
