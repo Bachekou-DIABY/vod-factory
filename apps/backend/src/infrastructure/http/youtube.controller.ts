@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Query,
@@ -93,11 +94,96 @@ export class YouTubeController {
     const playlistId = await this.youtubeService.createPlaylist(
       tournament.name,
       youtubeAccountId,
-      { privacyStatus: body.privacyStatus ?? 'public', description: body.description ?? '' },
+      { privacyStatus: body.privacyStatus, description: body.description ?? '' },
     );
     await this.tournamentRepository.update(id, { youtubePlaylistId: playlistId });
 
     return { playlistId, created: true };
+  }
+
+  /** Renomme la playlist du tournoi, ou change sa description et sa visibilité. */
+  @Patch('tournaments/:id/playlist')
+  async renamePlaylist(
+    @Param('id') id: string,
+    @Body() body: { title?: string; description?: string; privacyStatus?: string },
+  ) {
+    const tournament = await this.tournamentRepository.findById(id);
+    if (!tournament) throw new NotFoundException(`Tournoi ${id} non trouvé`);
+    if (!tournament.youtubePlaylistId) {
+      throw new BadRequestException(
+        'Ce tournoi ne possède pas encore de playlist.',
+      );
+    }
+
+    const comptes = await this.youtubeService.listAccounts();
+    if (comptes.length === 0) {
+      throw new BadRequestException('Aucune chaîne YouTube connectée.');
+    }
+
+    await this.youtubeService.updatePlaylist(
+      tournament.youtubePlaylistId,
+      comptes[0].id,
+      body,
+    );
+    return { playlistId: tournament.youtubePlaylistId, updated: true };
+  }
+
+  /**
+   * Ajoute à la playlist les clips déjà en ligne qui n'y sont pas.
+   *
+   * L'ajout à la playlist peut échouer alors que l'envoi a réussi : la vidéo
+   * existe, mais hors de la playlist. Cette route rattrape ces cas sans rien
+   * réenvoyer, donc sans consommer le quota d'upload.
+   */
+  @Post('tournaments/:id/playlist/sync')
+  async syncPlaylist(@Param('id') id: string) {
+    const tournament = await this.tournamentRepository.findById(id);
+    if (!tournament) throw new NotFoundException(`Tournoi ${id} non trouvé`);
+    if (!tournament.youtubePlaylistId) {
+      throw new BadRequestException(
+        'Ce tournoi ne possède pas encore de playlist.',
+      );
+    }
+
+    const comptes = await this.youtubeService.listAccounts();
+    if (comptes.length === 0) {
+      throw new BadRequestException('Aucune chaîne YouTube connectée.');
+    }
+    const compteId = comptes[0].id;
+
+    const dejaLa = await this.youtubeService.listPlaylistVideoIds(
+      tournament.youtubePlaylistId,
+      compteId,
+    );
+
+    const vods = await this.vodRepository.findByTournamentId(id);
+    const ajoutes: string[] = [];
+    const echecs: Array<{ videoId: string; raison: string }> = [];
+
+    for (const vod of vods) {
+      const clips = await this.clipRepository.findByVodId(vod.id);
+      for (const clip of clips) {
+        const videoId = clip.youtubeVideoId;
+        if (!videoId || dejaLa.has(videoId)) continue;
+        try {
+          await this.youtubeService.addToPlaylist(
+            tournament.youtubePlaylistId,
+            videoId,
+            compteId,
+          );
+          ajoutes.push(videoId);
+        } catch (err) {
+          echecs.push({ videoId, raison: (err as Error).message });
+        }
+      }
+    }
+
+    return {
+      playlistId: tournament.youtubePlaylistId,
+      dejaPresentes: dejaLa.size,
+      ajoutes: ajoutes.length,
+      echecs,
+    };
   }
 
   // ── Upload ───────────────────────────────────────────────────────────
@@ -173,7 +259,12 @@ export class YouTubeController {
       }
       await this.youtubeService.addToPlaylist(playlistId, videoId, youtubeAccountId);
     } catch (err) {
-      this.logger.warn(`Playlist add failed: ${(err as Error).message}`);
+      // Ne pas masquer : la vidéo est en ligne mais absente de la playlist, et
+      // c'est invisible sans ce message. POST .../playlist/sync rattrape le cas.
+      this.logger.error(
+        `❌ Ajout à la playlist échoué pour ${videoId} : ${(err as Error).message}. ` +
+          `Utilise POST /api/tournaments/${tournament?.id}/playlist/sync pour rattraper.`,
+      );
     }
   }
 }

@@ -159,7 +159,9 @@ export class YouTubeService {
       part: ['snippet', 'status'],
       requestBody: {
         snippet: { title, description: options?.description ?? '' },
-        status: { privacyStatus: options?.privacyStatus ?? 'public' },
+        // Non répertoriée par défaut, comme les clips. Une playlist publique
+        // rend le tournoi visible avant même qu'on ait relu les vidéos.
+        status: { privacyStatus: options?.privacyStatus ?? 'unlisted' },
       },
     });
     const playlistId = res.data.id!;
@@ -167,18 +169,115 @@ export class YouTubeService {
     return playlistId;
   }
 
-  async addToPlaylist(playlistId: string, videoId: string, youtubeAccountId: string): Promise<void> {
+  /**
+   * Ajoute une vidéo à une playlist, avec réessais.
+   *
+   * L'appel échoue de façon transitoire quand il suit de près la création de la
+   * playlist ou la fin d'un envoi : observé en production avec « The operation
+   * was aborted », dans la seconde qui suivait la création. La vidéo était bien
+   * en ligne, mais hors de la playlist, et personne ne le voyait puisque
+   * l'erreur était avalée.
+   */
+  async addToPlaylist(
+    playlistId: string,
+    videoId: string,
+    youtubeAccountId: string,
+    essais = 3,
+  ): Promise<void> {
+    let derniere: unknown;
+    for (let tentative = 1; tentative <= essais; tentative++) {
+      try {
+        const client = await this.loadClientForAccount(youtubeAccountId);
+        const yt = google.youtube({ version: 'v3', auth: client });
+        await yt.playlistItems.insert({
+          part: ['snippet'],
+          requestBody: {
+            snippet: {
+              playlistId,
+              resourceId: { kind: 'youtube#video', videoId },
+            },
+          },
+        });
+        this.logger.log(`➕ Vidéo ${videoId} ajoutée à la playlist ${playlistId}`);
+        return;
+      } catch (err) {
+        derniere = err;
+        this.logger.warn(
+          `Ajout à la playlist, tentative ${tentative}/${essais} échouée : ${(err as Error).message}`,
+        );
+        if (tentative < essais) {
+          await new Promise((r) => setTimeout(r, 2000 * tentative));
+        }
+      }
+    }
+    throw derniere;
+  }
+
+  /**
+   * Renomme une playlist, et change au besoin sa description ou sa visibilité.
+   *
+   * L'API exige que le snippet envoyé soit complet : un titre omis effacerait
+   * celui en place. On relit donc la playlist avant d'écrire.
+   */
+  async updatePlaylist(
+    playlistId: string,
+    youtubeAccountId: string,
+    changements: { title?: string; description?: string; privacyStatus?: string },
+  ): Promise<void> {
     const client = await this.loadClientForAccount(youtubeAccountId);
     const yt = google.youtube({ version: 'v3', auth: client });
-    await yt.playlistItems.insert({
-      part: ['snippet'],
+
+    const actuel = await yt.playlists.list({
+      part: ['snippet', 'status'],
+      id: [playlistId],
+    });
+    const existante = actuel.data.items?.[0];
+    if (!existante) {
+      throw new Error(`Playlist ${playlistId} introuvable sur la chaîne`);
+    }
+
+    await yt.playlists.update({
+      part: ['snippet', 'status'],
       requestBody: {
+        id: playlistId,
         snippet: {
-          playlistId,
-          resourceId: { kind: 'youtube#video', videoId },
+          title: changements.title ?? existante.snippet?.title ?? '',
+          description:
+            changements.description ?? existante.snippet?.description ?? '',
+        },
+        status: {
+          privacyStatus:
+            changements.privacyStatus ??
+            existante.status?.privacyStatus ??
+            'unlisted',
         },
       },
     });
-    this.logger.log(`➕ Vidéo ${videoId} ajoutée à la playlist ${playlistId}`);
+    this.logger.log(`✏️ Playlist ${playlistId} mise à jour`);
+  }
+
+  /** Identifiants des vidéos déjà présentes dans une playlist. */
+  async listPlaylistVideoIds(
+    playlistId: string,
+    youtubeAccountId: string,
+  ): Promise<Set<string>> {
+    const client = await this.loadClientForAccount(youtubeAccountId);
+    const yt = google.youtube({ version: 'v3', auth: client });
+    const presents = new Set<string>();
+    let pageToken: string | undefined;
+    do {
+      const res = await yt.playlistItems.list({
+        part: ['contentDetails'],
+        playlistId,
+        maxResults: 50,
+        pageToken,
+      });
+      for (const item of res.data.items ?? []) {
+        const id = item.contentDetails?.videoId;
+        if (id) presents.add(id);
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+    return presents;
   }
 }
