@@ -394,8 +394,24 @@ export class ApiService {
     return this.http.delete(`${this.base}/youtube/accounts/${id}`);
   }
 
-  uploadClipToYoutube(clipId: string): Observable<{ message?: string; youtubeVideoId?: string; alreadyUploaded?: boolean }> {
-    return this.http.post<any>(`${this.base}/clips/${clipId}/upload-youtube`, {});
+  uploadClipToYoutube(
+    clipId: string,
+    meta: { title: string; description: string; privacyStatus: string },
+  ): Observable<{ message?: string; youtubeVideoId?: string; alreadyUploaded?: boolean }> {
+    return this.http.post<any>(`${this.base}/clips/${clipId}/upload-youtube`, meta);
+  }
+
+  renameTournamentPlaylist(
+    tournamentId: string,
+    changes: { title?: string; description?: string; privacyStatus?: string },
+  ): Observable<{ playlistId: string; updated: boolean }> {
+    return this.http.patch<any>(`${this.base}/tournaments/${tournamentId}/playlist`, changes);
+  }
+
+  syncTournamentPlaylist(
+    tournamentId: string,
+  ): Observable<{ playlistId: string; dejaPresentes: number; ajoutes: number; echecs: unknown[] }> {
+    return this.http.post<any>(`${this.base}/tournaments/${tournamentId}/playlist/sync`, {});
   }
 
   ensureTournamentPlaylist(tournamentId: string, opts: { privacyStatus: string; description: string }): Observable<{ playlistId: string; created: boolean }> {

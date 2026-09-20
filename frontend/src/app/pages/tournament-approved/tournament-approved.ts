@@ -105,6 +105,43 @@ import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api
             </div>
           }
 
+          @if (clipEnCours(); as c) {
+            <div class="mb-4 bg-gray-900 border border-red-800 rounded-xl p-4">
+              <h3 class="text-sm font-semibold text-gray-200 mb-3">Envoyer ce clip sur YouTube</h3>
+              <div class="grid gap-3">
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Titre</label>
+                  <input type="text" [(ngModel)]="clipTitre"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500" />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Description</label>
+                  <textarea [(ngModel)]="clipDescription" rows="3"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:border-red-500"></textarea>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Visibilite</label>
+                  <select [(ngModel)]="clipPrivacy"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">
+                    <option value="unlisted">Non repertorie</option>
+                    <option value="private">Prive</option>
+                    <option value="public">Public</option>
+                  </select>
+                </div>
+                <div class="flex gap-2 justify-end">
+                  <button (click)="clipEnCours.set(null)"
+                    class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">
+                    Annuler
+                  </button>
+                  <button (click)="confirmerEnvoiClip()" [disabled]="!clipTitre.trim()"
+                    class="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-40 rounded-lg text-sm font-medium transition-colors">
+                    Envoyer
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
           <div class="grid gap-3">
             @for (clip of clips(); track clip.id) {
               <div class="flex gap-4 bg-gray-900 rounded-xl p-4 border border-gray-800">
@@ -149,12 +186,12 @@ import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api
                       } @else if (clip.status === 'UPLOADING') {
                         <span class="px-2 py-1 bg-yellow-900 text-yellow-300 rounded text-xs font-medium animate-pulse">⏳ Upload...</span>
                       } @else if (clip.status === 'FAILED') {
-                        <button (click)="uploadOne(clip)"
+                        <button (click)="ouvrirFormulaireClip(clip)"
                           class="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs transition-colors">
                           ↺ Réessayer
                         </button>
                       } @else if (ytAuthenticated()) {
-                        <button (click)="uploadOne(clip)"
+                        <button (click)="ouvrirFormulaireClip(clip)"
                           class="px-2 py-1 bg-red-700 hover:bg-red-600 rounded text-xs transition-colors">
                           Uploader sur YouTube
                         </button>
@@ -196,8 +233,17 @@ export class TournamentApprovedPage implements OnInit {
   uploadingAll = signal(false);
   uploadMsg = signal('');
   showPlaylistForm = signal(false);
-  playlistPrivacy = 'public';
+  // Non repertorie par defaut : une erreur de titre ou de decoupe se corrige
+  // tant que la video n est pas publique.
+  playlistPrivacy = 'unlisted';
   playlistDescription = '';
+
+  // Envoi d un clip isole : le formulaire est obligatoire, meme si l on se
+  // contente des valeurs proposees.
+  clipEnCours = signal<Clip | null>(null);
+  clipTitre = '';
+  clipDescription = '';
+  clipPrivacy = 'unlisted';
 
   ytAuthenticated() {
     return this.youtubeAccounts().length > 0;
@@ -234,10 +280,35 @@ export class TournamentApprovedPage implements OnInit {
     });
   }
 
-  uploadOne(clip: Clip) {
+  /** Pre-remplit le formulaire d un clip et l ouvre. */
+  ouvrirFormulaireClip(clip: Clip) {
+    this.clipEnCours.set(clip);
+    this.clipTitre = clip.title ?? clip.roundName ?? `Set ${clip.setOrder}`;
+    this.clipDescription = clip.description ?? this.descriptionParDefaut(clip);
+    this.clipPrivacy = clip.privacyStatus ?? 'unlisted';
+  }
+
+  private descriptionParDefaut(clip: Clip): string {
+    return [clip.roundName, clip.players, clip.score ? `Score : ${clip.score}` : '']
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  confirmerEnvoiClip() {
+    const clip = this.clipEnCours();
+    if (!clip || !this.clipTitre.trim()) return;
+    this.clipEnCours.set(null);
+    this.uploadOne(clip, {
+      title: this.clipTitre,
+      description: this.clipDescription,
+      privacyStatus: this.clipPrivacy,
+    });
+  }
+
+  uploadOne(clip: Clip, meta: { title: string; description: string; privacyStatus: string }) {
     // Optimistic UI
     this.clips.update(list => list.map(c => c.id === clip.id ? { ...c, status: 'UPLOADING' } : c));
-    this.api.uploadClipToYoutube(clip.id).subscribe({
+    this.api.uploadClipToYoutube(clip.id, meta).subscribe({
       next: (r) => {
         if (r.alreadyUploaded) {
           this.clips.update(list => list.map(c => c.id === clip.id ? { ...c, status: 'UPLOADED', youtubeVideoId: r.youtubeVideoId } : c));
@@ -280,7 +351,13 @@ export class TournamentApprovedPage implements OnInit {
     }).subscribe({
       next: (res) => {
         this.uploadMsg.set(`${res.created ? 'Playlist créée' : 'Playlist existante'} — Upload de ${uploadable.length} clips en cours...`);
-        uploadable.forEach(c => this.uploadOne(c));
+        uploadable.forEach((c) =>
+          this.uploadOne(c, {
+            title: c.title ?? c.roundName ?? `Set ${c.setOrder}`,
+            description: c.description ?? this.descriptionParDefaut(c),
+            privacyStatus: this.clipPrivacy,
+          }),
+        );
         setTimeout(() => this.uploadingAll.set(false), 2000);
       },
       error: (err) => {

@@ -19,6 +19,15 @@ import { IClipRepository, CLIP_REPOSITORY_TOKEN } from '../../domain/repositorie
 import { IVodRepository, VOD_REPOSITORY_TOKEN } from '../../domain/repositories/vod.repository.interface';
 import { ITournamentRepository } from '../../domain/repositories/tournament.repository.interface';
 
+/** Visibilités acceptées par l'API YouTube. */
+const VISIBILITES = ['public', 'unlisted', 'private'] as const;
+
+class UploadClipDto {
+  title!: string;
+  description!: string;
+  privacyStatus!: (typeof VISIBILITES)[number];
+}
+
 @Controller()
 export class YouTubeController {
   private readonly logger = new Logger(YouTubeController.name);
@@ -188,11 +197,40 @@ export class YouTubeController {
 
   // ── Upload ───────────────────────────────────────────────────────────
 
+  /**
+   * Envoie un clip sur YouTube.
+   *
+   * Le titre, la description et la visibilité sont exigés explicitement. Ils
+   * ont des valeurs par défaut côté interface, mais l'appel ne doit pas pouvoir
+   * s'en passer : une vidéo publiée sous un titre ou une visibilité qu'on n'a
+   * pas choisis se rattrape mal, et c'est précisément ce qui est arrivé à la
+   * première playlist, créée publique parce que personne n'avait tranché.
+   */
   @Post('clips/:id/upload-youtube')
-  async uploadClip(@Param('id') id: string) {
+  async uploadClip(
+    @Param('id') id: string,
+    @Body() body: UploadClipDto,
+  ) {
     const clip = await this.clipRepository.findById(id);
     if (!clip) throw new NotFoundException(`Clip ${id} non trouvé`);
     if (!clip.filePath) throw new BadRequestException('Clip sans fichier');
+
+    const titre = (body?.title ?? '').trim();
+    if (!titre) {
+      throw new BadRequestException(
+        'Le titre est obligatoire. Passe par le formulaire avant d envoyer.',
+      );
+    }
+    if (body?.description == null) {
+      throw new BadRequestException(
+        'La description est obligatoire, même vide. Passe par le formulaire avant d envoyer.',
+      );
+    }
+    if (!VISIBILITES.includes(body?.privacyStatus as any)) {
+      throw new BadRequestException(
+        `La visibilité doit valoir ${VISIBILITES.join(', ')}.`,
+      );
+    }
     if (clip.status === 'UPLOADING') throw new BadRequestException('Upload déjà en cours');
     if (clip.status === 'UPLOADED') return { youtubeVideoId: clip.youtubeVideoId, alreadyUploaded: true };
 
@@ -209,8 +247,22 @@ export class YouTubeController {
       ? await this.tournamentRepository.findById(vod.tournamentId)
       : null;
 
-    await this.clipRepository.update(id, { status: 'UPLOADING' });
-    this.runUpload(id, clip, youtubeAccountId, tournament).catch((err) => {
+    // Les choix sont enregistrés avant l'envoi : ils deviennent l'état du clip,
+    // et non un paramètre de passage oublié aussitôt.
+    await this.clipRepository.update(id, {
+      title: titre,
+      description: body.description,
+      privacyStatus: body.privacyStatus,
+      status: 'UPLOADING',
+    });
+    const clipAJour = {
+      ...clip,
+      title: titre,
+      description: body.description,
+      privacyStatus: body.privacyStatus,
+    };
+
+    this.runUpload(id, clipAJour, youtubeAccountId, tournament).catch((err) => {
       this.logger.error(`Upload background error: ${err}`);
     });
 
@@ -218,15 +270,10 @@ export class YouTubeController {
   }
 
   private async runUpload(clipId: string, clip: any, youtubeAccountId: string, tournament: any) {
-    const title = clip.title ?? clip.roundName ?? `Set ${clip.setOrder}`;
-    let description = clip.description ?? '';
-    if (!description) {
-      const parts: string[] = [];
-      if (clip.roundName) parts.push(clip.roundName);
-      if (clip.players) parts.push(clip.players);
-      if (clip.score) parts.push(`Score : ${clip.score}`);
-      description = parts.join('\n');
-    }
+    // Aucun repli ici : le contrôleur a exigé et enregistré ces valeurs. Un
+    // repli réécrirait une description que l'on a volontairement laissée vide.
+    const title = clip.title;
+    const description = clip.description ?? '';
 
     try {
       const videoId = await this.youtubeService.uploadVideo({
