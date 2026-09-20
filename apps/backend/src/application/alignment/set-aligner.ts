@@ -41,18 +41,7 @@ export interface AlignerOptions {
    * moment où il appelle les joueurs. `completedAt` est le champ le plus bruité.
    */
   weightTimeEnd: number;
-  /**
-   * Écart temporel toléré sans coût, en secondes.
-   *
-   * Le TO clique « set en cours » quand il appelle les joueurs, et « terminé »
-   * quand il y repense. Quelques minutes d'écart ne sont donc pas une anomalie
-   * mais le fonctionnement normal de l'outil, et ne doivent rien coûter. Sans
-   * cette zone morte, un set lancé en retard coûte plus cher qu'une game
-   * manquante, alors que le score est une donnée exacte et l'horodatage une
-   * approximation humaine.
-   */
-  timeDeadbandSeconds: number;
-  /** Plafond de l'écart temporel pénalisé, zone morte déduite, en secondes. */
+  /** Plafond de l'écart temporel pris en compte, en secondes. */
   timeCapSeconds: number;
   /** Coût d'un candidat laissé de côté. */
   orphanPenalty: number;
@@ -76,7 +65,6 @@ export const DEFAULT_ALIGNER_OPTIONS: Omit<
   weightCount: 3,
   weightTime: 0.02,
   weightTimeEnd: 0.01,
-  timeDeadbandSeconds: 120,
   timeCapSeconds: 600,
   orphanPenalty: 1.5,
   // Élevé volontairement : un set passé on-stream avec un score valide est
@@ -99,8 +87,15 @@ function toVodSeconds(
 }
 
 /**
- * Coût d'un écart à un horodatage API : gratuit dans la zone morte, linéaire
- * ensuite, puis plafonné.
+ * Coût d'un écart à un horodatage API : linéaire, puis plafonné.
+ *
+ * Une tolérance gratuite a été essayée ici, pour absorber les quelques minutes
+ * de retard d'un TO qui clique « set en cours » en appelant les joueurs. Elle
+ * a dû être retirée : sur Riptide, où douze sets sont déclarés sur la même
+ * chaîne alors qu'un seul est à l'antenne, l'horodatage est le seul élément
+ * qui distingue celui qui a été diffusé. L'affaiblir faisait attribuer des
+ * games à deux sets jamais filmés et laissait le vrai set vide.
+ * Voir `riptide-regression.spec.ts`.
  */
 function timeCost(
   actual: number,
@@ -108,9 +103,9 @@ function timeCost(
   weight: number,
   opts: AlignerOptions,
 ): number {
-  const ecart = Math.abs(actual - expected) - opts.timeDeadbandSeconds;
-  if (ecart <= 0) return 0;
-  return Math.min(ecart, opts.timeCapSeconds) * weight;
+  return (
+    Math.min(Math.abs(actual - expected), opts.timeCapSeconds) * weight
+  );
 }
 
 /** Coût d'attribution des candidats [from, to) au set donné. */

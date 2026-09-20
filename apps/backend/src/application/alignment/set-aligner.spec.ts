@@ -46,37 +46,17 @@ function makeGames(starts: number[], duration = 200): GameCandidate[] {
 }
 
 describe('alignSets', () => {
-  it('préfère le score à l horodatage quand le TO a lancé le set en retard', () => {
-    // Cas réel, L'Oracle, Susu contre Rulta : le set annonce 5 games, le TO l'a
-    // marqué en cours 250 s après le début effectif de la première game.
-    // Sans zone morte, ce retard coûte plus cher qu'une game manquante et la
-    // première game part en orphelin.
-    const sets = [makeSet(1, 5, 350, 1400)];
-    const candidates = makeGames([100, 350, 600, 850, 1100], 200);
+  it('garde l horodatage décisif quand plusieurs sets se disputent les mêmes games', () => {
+    // Deux sets déclarés sur la même chaîne, un seul réellement diffusé. Seul
+    // l'horodatage les distingue : le coût temporel doit donc rester mordant.
+    // Une tolérance gratuite a été essayée ici et retirée, elle cassait ce cas.
+    const sets = [makeSet(1, 3, 100, 800), makeSet(2, 3, 5000, 5800)];
+    const candidates = makeGames([120, 400, 680]);
 
     const aligned = alignSets(sets, candidates, options());
 
-    expect(aligned[0].games.map((g) => g.startSeconds)).toEqual([
-      100, 350, 600, 850, 1100,
-    ]);
-    expect(aligned[0].source).toBe('video');
-  });
-
-  it('garde l horodatage discriminant au-delà de la zone morte', () => {
-    // Zone morte annulée : l'ancrage temporel redevient strict et la première
-    // game, trop loin du début annoncé, est écartée.
-    const sets = [makeSet(1, 5, 350, 1400)];
-    const candidates = makeGames([100, 350, 600, 850, 1100], 200);
-
-    const aligned = alignSets(
-      sets,
-      candidates,
-      options({ timeDeadbandSeconds: 0 }),
-    );
-
-    expect(aligned[0].games.map((g) => g.startSeconds)).toEqual([
-      350, 600, 850, 1100,
-    ]);
+    expect(aligned[0].games).toHaveLength(3);
+    expect(aligned[1].games).toHaveLength(0);
   });
 
   it('attribue à chaque set le nombre de games annoncé par son score', () => {
