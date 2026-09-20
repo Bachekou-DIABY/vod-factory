@@ -181,6 +181,22 @@ export class VodController {
     const fileSize = stat.size;
     const range = req.headers.range;
 
+    // Express route les requêtes HEAD vers le gestionnaire GET. Sans ce cas
+    // particulier, on ouvre un flux de lecture sur le fichier : Node supprime
+    // bien le corps de la réponse, mais lit quand même les onze gigaoctets
+    // avant de la terminer. La requête reste donc suspendue pendant des
+    // minutes, et comme un navigateur n'ouvre que six connexions par domaine,
+    // quelques HEAD suffisent à figer tout le site.
+    if (req.method === 'HEAD') {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': 'video/mp4',
+        'Accept-Ranges': 'bytes',
+      });
+      res.end();
+      return;
+    }
+
     if (range) {
       const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
       const start = parseInt(startStr, 10);
