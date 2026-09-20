@@ -401,6 +401,22 @@ export class ApiService {
     return this.http.post<any>(`${this.base}/clips/${clipId}/upload-youtube`, meta);
   }
 
+  setTournamentClipsVisibility(
+    tournamentId: string,
+    body: { privacyStatus: string; includePlaylist: boolean },
+  ): Observable<{
+    privacyStatus: string;
+    modifies: number;
+    inchanges: number;
+    playlist: string | null;
+    echecs: Array<{ clipId: string; raison: string }>;
+  }> {
+    return this.http.patch<any>(
+      `${this.base}/tournaments/${tournamentId}/clips/visibility`,
+      body,
+    );
+  }
+
   renameTournamentPlaylist(
     tournamentId: string,
     changes: { title?: string; description?: string; privacyStatus?: string },

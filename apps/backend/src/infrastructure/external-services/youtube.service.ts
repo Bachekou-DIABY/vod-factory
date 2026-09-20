@@ -183,6 +183,38 @@ export class YouTubeService {
     return videoId;
   }
 
+  /**
+   * Change la visibilite d une video deja en ligne.
+   *
+   * L API remplace la partie `status` entiere : un champ omis reprend sa valeur
+   * par defaut. On relit donc la video avant d ecrire, sinon on effacerait au
+   * passage la licence, la publication programmee ou la declaration
+   * "concu pour les enfants".
+   */
+  async updateVideoPrivacy(
+    videoId: string,
+    youtubeAccountId: string,
+    privacyStatus: string,
+  ): Promise<void> {
+    const client = await this.loadClientForAccount(youtubeAccountId);
+    const yt = google.youtube({ version: 'v3', auth: client });
+
+    const actuel = await yt.videos.list({ part: ['status'], id: [videoId] });
+    const statut = actuel.data.items?.[0]?.status;
+    if (!statut) {
+      throw new Error(`Video ${videoId} introuvable sur la chaine`);
+    }
+
+    await yt.videos.update({
+      part: ['status'],
+      requestBody: {
+        id: videoId,
+        status: { ...statut, privacyStatus },
+      },
+    });
+    this.logger.log(`Video ${videoId} passee en ${privacyStatus}`);
+  }
+
   async createPlaylist(title: string, youtubeAccountId: string, options?: { description?: string; privacyStatus?: string }): Promise<string> {
     const client = await this.loadClientForAccount(youtubeAccountId);
     const yt = google.youtube({ version: 'v3', auth: client });

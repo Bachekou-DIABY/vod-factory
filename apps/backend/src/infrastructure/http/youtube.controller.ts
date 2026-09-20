@@ -198,6 +198,117 @@ export class YouTubeController {
     };
   }
 
+  /** Change la visibilite d un clip deja en ligne. */
+  @Patch('clips/:id/visibility')
+  async changerVisibiliteClip(
+    @Param('id') id: string,
+    @Body() body: { privacyStatus?: string },
+  ) {
+    const clip = await this.clipRepository.findById(id);
+    if (!clip) throw new NotFoundException(`Clip ${id} non trouve`);
+    if (!clip.youtubeVideoId) {
+      throw new BadRequestException('Ce clip ne se trouve pas encore sur YouTube.');
+    }
+    if (!VISIBILITES.includes(body?.privacyStatus as any)) {
+      throw new BadRequestException(
+        `La visibilite doit valoir ${VISIBILITES.join(', ')}.`,
+      );
+    }
+
+    const comptes = await this.youtubeService.listAccounts();
+    if (comptes.length === 0) {
+      throw new BadRequestException('Aucune chaine YouTube connectee.');
+    }
+
+    await this.youtubeService.updateVideoPrivacy(
+      clip.youtubeVideoId,
+      comptes[0].id,
+      body.privacyStatus!,
+    );
+    await this.clipRepository.update(id, { privacyStatus: body.privacyStatus });
+    return { clipId: id, privacyStatus: body.privacyStatus };
+  }
+
+  /**
+   * Change la visibilite de tous les clips d un tournoi deja en ligne.
+   *
+   * Ne met rien en ligne, donc echappe au plafond de mises en ligne de la
+   * chaine, et coute 50 unites par video au lieu de 1600. C est ce qui permet
+   * d envoyer en non repertorie, de relire, puis de publier d un seul geste.
+   */
+  @Patch('tournaments/:id/clips/visibility')
+  async changerVisibiliteTournoi(
+    @Param('id') id: string,
+    @Body() body: { privacyStatus?: string; includePlaylist?: boolean },
+  ) {
+    const tournament = await this.tournamentRepository.findById(id);
+    if (!tournament) throw new NotFoundException(`Tournoi ${id} non trouve`);
+    if (!VISIBILITES.includes(body?.privacyStatus as any)) {
+      throw new BadRequestException(
+        `La visibilite doit valoir ${VISIBILITES.join(', ')}.`,
+      );
+    }
+    const visibilite = body.privacyStatus!;
+
+    const comptes = await this.youtubeService.listAccounts();
+    if (comptes.length === 0) {
+      throw new BadRequestException('Aucune chaine YouTube connectee.');
+    }
+    const compteId = comptes[0].id;
+
+    const vods = await this.vodRepository.findByTournamentId(id);
+    const modifies: string[] = [];
+    const inchanges: string[] = [];
+    const echecs: Array<{ clipId: string; raison: string }> = [];
+
+    for (const vod of vods) {
+      for (const clip of await this.clipRepository.findByVodId(vod.id)) {
+        if (!clip.youtubeVideoId) continue;
+        if (clip.privacyStatus === visibilite) {
+          inchanges.push(clip.id);
+          continue;
+        }
+        try {
+          await this.youtubeService.updateVideoPrivacy(
+            clip.youtubeVideoId,
+            compteId,
+            visibilite,
+          );
+          await this.clipRepository.update(clip.id, { privacyStatus: visibilite });
+          modifies.push(clip.id);
+        } catch (err) {
+          echecs.push({ clipId: clip.id, raison: (err as Error).message });
+        }
+      }
+    }
+
+    let playlist: string | null = null;
+    if (body.includePlaylist && tournament.youtubePlaylistId) {
+      try {
+        await this.youtubeService.updatePlaylist(
+          tournament.youtubePlaylistId,
+          compteId,
+          { privacyStatus: visibilite },
+        );
+        playlist = tournament.youtubePlaylistId;
+      } catch (err) {
+        echecs.push({ clipId: 'playlist', raison: (err as Error).message });
+      }
+    }
+
+    this.logger.log(
+      `Visibilite ${visibilite} : ${modifies.length} clip(s) modifie(s), ` +
+        `${inchanges.length} deja conforme(s), ${echecs.length} echec(s)`,
+    );
+    return {
+      privacyStatus: visibilite,
+      modifies: modifies.length,
+      inchanges: inchanges.length,
+      playlist,
+      echecs,
+    };
+  }
+
   // ── Upload ───────────────────────────────────────────────────────────
 
   /**

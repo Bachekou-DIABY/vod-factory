@@ -51,13 +51,21 @@ import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api
           </div>
         } @else {
           <!-- Upload All Button -->
-          @if (ytAuthenticated() && hasUploadable()) {
+          @if (ytAuthenticated() && (hasUploadable() || dejaEnLigne() > 0)) {
             <div class="mb-4 flex flex-col items-end gap-2">
               <div class="flex gap-2">
                 <button (click)="downloadAll()"
                   class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors">
                   ↓ Tout télécharger
                 </button>
+                @if (dejaEnLigne() > 0) {
+                  <button (click)="showPublishForm.set(!showPublishForm())"
+                    [disabled]="publishing()"
+                    class="px-4 py-2 bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                    {{ publishing() ? 'Publication...' : 'Changer la visibilite (' + dejaEnLigne() + ')' }}
+                  </button>
+                }
+                @if (hasUploadable()) {
                 <button (click)="showPlaylistForm.set(!showPlaylistForm())"
                   [disabled]="uploadingAll()"
                   class="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
@@ -67,7 +75,43 @@ import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api
                     Tout uploader sur YouTube
                   }
                 </button>
+                }
               </div>
+
+              @if (showPublishForm()) {
+                <div class="w-full bg-gray-900 border border-green-800 rounded-xl p-4">
+                  <h3 class="text-sm font-semibold text-gray-200 mb-1">Changer la visibilite</h3>
+                  <p class="text-xs text-gray-500 mb-3">
+                    Porte sur les {{ dejaEnLigne() }} video(s) deja en ligne. Rien n est renvoye,
+                    donc le plafond de mises en ligne de la chaine ne s applique pas.
+                  </p>
+                  <div class="grid gap-3">
+                    <div>
+                      <label class="block text-xs text-gray-400 mb-1">Nouvelle visibilite</label>
+                      <select [(ngModel)]="publishPrivacy"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500">
+                        <option value="public">Public</option>
+                        <option value="unlisted">Non repertorie</option>
+                        <option value="private">Prive</option>
+                      </select>
+                    </div>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                      <input type="checkbox" [(ngModel)]="publishPlaylist" class="accent-green-600" />
+                      Appliquer aussi a la playlist du tournoi
+                    </label>
+                    <div class="flex gap-2 justify-end">
+                      <button (click)="showPublishForm.set(false)"
+                        class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">
+                        Annuler
+                      </button>
+                      <button (click)="appliquerVisibilite()" [disabled]="publishing()"
+                        class="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 rounded-lg text-sm font-medium transition-colors">
+                        Appliquer
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              }
 
               @if (showPlaylistForm()) {
                 <div class="w-full bg-gray-900 border border-gray-700 rounded-xl p-4">
@@ -245,6 +289,14 @@ export class TournamentApprovedPage implements OnInit {
   clipDescription = '';
   clipPrivacy = 'unlisted';
 
+  // Publication en lot des videos deja en ligne. Ne met rien en ligne, donc
+  // echappe au plafond journalier de la chaine.
+  showPublishForm = signal(false);
+  publishing = signal(false);
+  publishPrivacy = 'public';
+  publishPlaylist = true;
+  dejaEnLigne = () => this.clips().filter((c) => c.status === 'UPLOADED').length;
+
   ytAuthenticated() {
     return this.youtubeAccounts().length > 0;
   }
@@ -278,6 +330,41 @@ export class TournamentApprovedPage implements OnInit {
       next: (r) => window.open(r.url, '_blank'),
       error: (err) => alert('Erreur: ' + (err.error?.message ?? err.message)),
     });
+  }
+
+  appliquerVisibilite() {
+    const tournamentId = this.tournament()?.id;
+    if (!tournamentId || this.publishing()) return;
+
+    this.publishing.set(true);
+    this.showPublishForm.set(false);
+    this.uploadMsg.set('Changement de visibilite en cours...');
+
+    this.api
+      .setTournamentClipsVisibility(tournamentId, {
+        privacyStatus: this.publishPrivacy,
+        includePlaylist: this.publishPlaylist,
+      })
+      .subscribe({
+        next: (r) => {
+          this.publishing.set(false);
+          const parts = [`${r.modifies} video(s) passee(s) en ${r.privacyStatus}`];
+          if (r.inchanges > 0) parts.push(`${r.inchanges} deja conforme(s)`);
+          if (r.playlist) parts.push('playlist incluse');
+          if (r.echecs.length > 0) parts.push(`${r.echecs.length} echec(s)`);
+          this.uploadMsg.set(parts.join(', ') + '.');
+          const t = this.tournament();
+          if (t) {
+            this.api
+              .getTournamentApprovedClips(t.id)
+              .subscribe((clips) => this.clips.set(clips));
+          }
+        },
+        error: (err) => {
+          this.publishing.set(false);
+          this.uploadMsg.set('Erreur: ' + (err.error?.message ?? err.message));
+        },
+      });
   }
 
   /** Pre-remplit le formulaire d un clip et l ouvre. */
