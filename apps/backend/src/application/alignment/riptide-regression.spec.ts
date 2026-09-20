@@ -1,5 +1,6 @@
 import { ExpectedSet, FrameSignal } from '../../domain/alignment/alignment.types';
-import { DEFAULT_ALIGNER_OPTIONS, alignSets } from './set-aligner';
+import { DEFAULT_ALIGNER_OPTIONS } from './set-aligner';
+import { refineAlignment } from './refine';
 import { DEFAULT_SEGMENTER_OPTIONS, segment } from './segmenter';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -49,7 +50,7 @@ describe('Riptide 2026, habillage VGBootCamp', () => {
   };
 
   it('attribue les cinq games au seul set réellement diffusé', () => {
-    const aligned = alignSets(sets, segment(signal, DEFAULT_SEGMENTER_OPTIONS), options);
+    const aligned = refineAlignment(signal, sets, segment(signal, DEFAULT_SEGMENTER_OPTIONS), options).aligned;
 
     const diffuse = aligned.filter((a) => a.games.length > 0);
 
@@ -59,7 +60,7 @@ describe('Riptide 2026, habillage VGBootCamp', () => {
   });
 
   it('n attribue aucune game aux onze sets jamais passés à l antenne', () => {
-    const aligned = alignSets(sets, segment(signal, DEFAULT_SEGMENTER_OPTIONS), options);
+    const aligned = refineAlignment(signal, sets, segment(signal, DEFAULT_SEGMENTER_OPTIONS), options).aligned;
 
     const vides = aligned.filter((a) => a.games.length === 0);
 

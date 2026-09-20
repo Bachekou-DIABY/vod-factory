@@ -26,20 +26,10 @@ import { VodStatus } from '../../domain/entities/vod.entity';
 import { FrameSignalService, HudZone } from '../../infrastructure/external-services/frame-signal.service';
 import { TimerOcrValidatorService } from '../../infrastructure/external-services/timer-ocr-validator.service';
 import { estimateGameCount } from '../alignment/score-parser';
-import {
-  DEFAULT_SEGMENTER_OPTIONS,
-  RELAXED_SEGMENTER_OPTIONS,
-  resegmentWindow,
-  segment,
-} from '../alignment/segmenter';
+import { DEFAULT_SEGMENTER_OPTIONS, segment } from '../alignment/segmenter';
 import { OffsetEstimate, estimateBias } from '../alignment/offset-estimator';
 import { filterSetsToVodWindow } from '../alignment/vod-window';
-import { splitToMatchCount } from '../alignment/game-splitter';
-import {
-  DEFAULT_CLIP_BOUNDS_OPTIONS,
-  clampToNextClip,
-  trimDeadPreRoll,
-} from '../alignment/clip-bounds';
+import { refineAlignment } from '../alignment/refine';
 import {
   AlignerOptions,
   DEFAULT_ALIGNER_OPTIONS,
@@ -183,46 +173,23 @@ export class AlignVodSetsUseCase {
         vodDurationSeconds: durationSeconds,
       };
 
-      let aligned = alignSets(sets, candidates, alignerOptions);
+      const raffine = refineAlignment(signal, sets, candidates, alignerOptions);
+      let aligned = raffine.aligned;
+      candidates = raffine.candidates;
 
-      // Passe de rattrapage : là où le score annonce plus de games qu'on n'en a
-      // trouvées, on re-segmente la fenêtre avec des seuils relâchés. Le signal
-      // est déjà en mémoire, donc c'est gratuit.
-      const extra = this.collectMissingGames(signal, aligned);
-      if (extra.length > 0) {
+      if (raffine.recuperees > 0) {
         this.logger.log(
-          `🔁 Re-scan relâché: ${extra.length} game(s) supplémentaire(s) récupérée(s)`,
+          `Re-scan relache: ${raffine.recuperees} game(s) supplementaire(s) recuperee(s)`,
         );
-        candidates = this.mergeCandidates(candidates, extra);
-        aligned = alignSets(sets, candidates, alignerOptions);
       }
-
-      // Dernier recours : là où le score annonce encore plus de games qu'on
-      // n'en a, c'est que deux d'entre elles sont recollées. On coupe la plus
-      // longue à son creux de noirceur, autant de fois que nécessaire.
-      const decoupees = this.splitMergedGames(signal, aligned);
-      if (decoupees > 0) {
+      if (raffine.decoupees > 0) {
         this.logger.log(
-          `✂️ ${decoupees} game(s) recollée(s) séparée(s) d'après le score Start.gg`,
+          `${raffine.decoupees} game(s) recollee(s) separee(s) d apres le score Start.gg`,
         );
-        candidates = this.rebuildCandidates(aligned, candidates);
-        aligned = alignSets(sets, candidates, alignerOptions);
       }
-
-      // Le début de clip est enfin recalé sur le contenu de l'image, pour ne pas
-      // ouvrir sur l'écran d'attente qui précède souvent un set.
-      const avant = aligned;
-      aligned = trimDeadPreRoll(signal, aligned, {
-        ...DEFAULT_CLIP_BOUNDS_OPTIONS,
-        // Rester cohérent avec la marge demandée : le recalage raccourcit, il
-        // ne doit jamais rallonger le clip.
-        preRollSeconds: alignerOptions.preRollSeconds,
-      });
-      aligned = clampToNextClip(aligned);
-      const recalés = aligned.filter((a, i) => a.startSeconds !== avant[i].startSeconds);
-      if (recalés.length > 0) {
+      if (raffine.recales > 0) {
         this.logger.log(
-          `✂️ ${recalés.length} début(s) de clip recalé(s) pour ne pas ouvrir sur une image morte`,
+          `${raffine.recales} debut(s) de clip recale(s) pour ne pas ouvrir sur une image morte`,
         );
       }
 
@@ -324,85 +291,6 @@ export class AlignVodSetsUseCase {
    * re-segmente sa fenêtre avec des seuils plus bas et renvoie les intervalles
    * qui n'étaient pas déjà connus.
    */
-  private collectMissingGames(
-    signal: FrameSignal,
-    aligned: AlignedSet[],
-  ): GameCandidate[] {
-    const extra: GameCandidate[] = [];
-
-    for (const entry of aligned) {
-      const expected = entry.set.gameCount;
-      if (expected === null || expected === 0) continue;
-      if (entry.games.length >= expected) continue;
-
-      const from = entry.startSeconds - REFINE_WINDOW_PADDING_SECONDS;
-      const to = entry.endSeconds + REFINE_WINDOW_PADDING_SECONDS;
-
-      const relaxed = resegmentWindow(signal, from, to, RELAXED_SEGMENTER_OPTIONS);
-      for (const candidate of relaxed) {
-        if (!this.overlapsAny(candidate, entry.games)) extra.push(candidate);
-      }
-    }
-
-    return extra;
-  }
-
-  /**
-   * Découpe les games recollées des sets encore incomplets. Mute `aligned` et
-   * renvoie le nombre de coupes réalisées.
-   */
-  private splitMergedGames(signal: FrameSignal, aligned: AlignedSet[]): number {
-    let coupes = 0;
-
-    for (const entry of aligned) {
-      const attendu = entry.set.gameCount;
-      if (attendu === null || attendu === 0) continue;
-      if (entry.games.length >= attendu) continue;
-
-      const avant = entry.games.length;
-      entry.games = splitToMatchCount(entry.games, signal, attendu);
-      coupes += entry.games.length - avant;
-    }
-
-    return coupes;
-  }
-
-  /**
-   * Reconstruit la liste globale de candidats à partir des games réparties,
-   * en conservant les orphelins que l'alignement n'avait attribués à personne.
-   */
-  private rebuildCandidates(
-    aligned: AlignedSet[],
-    precedents: GameCandidate[],
-  ): GameCandidate[] {
-    const attribues = aligned.flatMap((a) => a.games);
-    const orphelins = precedents.filter((c) => !this.overlapsAny(c, attribues));
-    return [...attribues, ...orphelins].sort(
-      (a, b) => a.startSeconds - b.startSeconds,
-    );
-  }
-
-  private overlapsAny(candidate: GameCandidate, known: GameCandidate[]): boolean {
-    const length = Math.max(1, candidate.endSeconds - candidate.startSeconds);
-    return known.some((other) => {
-      const overlap =
-        Math.min(candidate.endSeconds, other.endSeconds) -
-        Math.max(candidate.startSeconds, other.startSeconds);
-      return overlap / length > DUPLICATE_OVERLAP_RATIO;
-    });
-  }
-
-  private mergeCandidates(
-    base: GameCandidate[],
-    extra: GameCandidate[],
-  ): GameCandidate[] {
-    const merged = [...base];
-    for (const candidate of extra) {
-      if (!this.overlapsAny(candidate, merged)) merged.push(candidate);
-    }
-    return merged.sort((a, b) => a.startSeconds - b.startSeconds);
-  }
-
   /** Candidats qu'aucun set n'a retenus, pour le diagnostic. */
   private findOrphans(
     candidates: GameCandidate[],
