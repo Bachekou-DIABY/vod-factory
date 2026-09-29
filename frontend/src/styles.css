@@ -1,3 +1,53 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-gray-950 text-gray-100 antialiased;
+  }
+  :focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-accent;
+  }
+}
+
+@layer components {
+  /* Boutons : les mêmes trois rôles que la maquette. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-sm {
+    @apply h-9 px-3 text-xs;
+  }
+  .btn-primary {
+    @apply bg-accent text-accent-ink font-semibold hover:bg-accent-soft;
+  }
+  .btn-secondary {
+    @apply border border-gray-700 text-gray-100 hover:bg-gray-800;
+  }
+  .btn-youtube {
+    @apply bg-alert text-white font-semibold hover:brightness-110;
+  }
+  .btn-danger {
+    @apply border border-alert-line text-alert-text hover:bg-alert-bg;
+  }
+
+  .card {
+    @apply bg-gray-900 border border-gray-800 rounded-xl;
+  }
+  .field {
+    @apply h-11 bg-gray-800 border border-gray-700 rounded-lg px-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-accent;
+  }
+  .label {
+    @apply block text-xs text-gray-400 mb-1.5;
+  }
+  .eyebrow {
+    @apply font-mono text-xs tracking-widest text-gray-400 uppercase;
+  }
+  .banner-alert {
+    @apply flex items-start gap-3 px-4 py-3 rounded-xl border border-alert-line bg-alert-bg text-alert-pale;
+  }
+}

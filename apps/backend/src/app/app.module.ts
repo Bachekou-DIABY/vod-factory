@@ -35,6 +35,7 @@ import { TournamentSetsController } from '../infrastructure/http/tournament-sets
 import { ListTournamentsController } from '../infrastructure/http/list-tournaments.controller';
 import { ClipController } from '../infrastructure/http/clip.controller';
 import { StartGGController } from '../infrastructure/http/startgg.controller';
+import { SystemController } from '../infrastructure/http/system.controller';
 import { YouTubeController } from '../infrastructure/http/youtube.controller';
 import { YouTubeService } from '../infrastructure/external-services/youtube.service';
 import { ClipSetProcessor } from '../infrastructure/queues/clip-set.processor';
@@ -70,7 +71,7 @@ export { VOD_PROCESSING_QUEUE };
     BullModule.registerQueue({ name: VOD_DOWNLOAD_QUEUE }),
     BullModule.registerQueue({ name: VOD_ALIGN_QUEUE }),
   ],
-  controllers: [AppController, TournamentController, VodController, VodAlignmentController, TournamentVodsController, TournamentSetsController, ListTournamentsController, ClipController, StartGGController, YouTubeController],
+  controllers: [AppController, TournamentController, VodController, VodAlignmentController, TournamentVodsController, TournamentSetsController, ListTournamentsController, ClipController, StartGGController, YouTubeController, SystemController],
   providers: [
     AppService, 
     PrismaService,

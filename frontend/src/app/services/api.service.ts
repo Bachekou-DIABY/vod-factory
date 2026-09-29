@@ -8,6 +8,7 @@ export interface Tournament {
   name: string;
   slug: string;
   startAt?: string;
+  youtubePlaylistId?: string;
 }
 
 export interface YoutubeAccount {
@@ -62,6 +63,8 @@ export interface Vod {
   events?: any[];
   createdAt: string;
   recordedAt?: string;
+  duration?: number;
+  fileSize?: number;
 }
 
 export interface Clip {
@@ -121,7 +124,15 @@ export interface AlignmentReport {
   setsPartial: number;
   setsFromApiOnly: number;
   aligned: AlignedSet[];
+  /** Games détectées qu'aucun set n'a retenues, souvent des échauffements. */
+  orphans?: AlignedGame[];
   generatedAt: string;
+}
+
+export interface StorageInfo {
+  totalBytes: number;
+  freeBytes: number;
+  usedBytes: number;
 }
 
 export interface ClipPlan {
@@ -384,6 +395,10 @@ export class ApiService {
   // YouTube accounts
   getYoutubeAuthUrl(): Observable<{ url: string }> {
     return this.http.get<{ url: string }>(`${this.base}/youtube/auth-url`);
+  }
+
+  getStorage(): Observable<StorageInfo> {
+    return this.http.get<StorageInfo>(`${this.base}/system/storage`);
   }
 
   getYoutubeAccounts(): Observable<YoutubeAccount[]> {

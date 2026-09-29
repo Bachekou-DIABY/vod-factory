@@ -1,199 +1,204 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { ApiService, Tournament, StartGGTournamentResult, YoutubeAccount } from '../../services/api.service';
+import { ApiService, Tournament, StartGGTournamentResult, YoutubeAccount, StorageInfo } from '../../services/api.service';
+import { IconComponent } from '../../components/icon';
 
 @Component({
   selector: 'app-tournaments',
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, IconComponent],
   template: `
-    <div class="min-h-screen bg-gray-950 text-white p-8">
-      <h1 class="text-3xl font-bold mb-8">Tournois</h1>
+    <main class="px-6 lg:px-10 py-10 max-w-[1440px] mx-auto flex flex-col xl:flex-row gap-8 items-start">
 
-      <!-- Search / Import -->
-      <div class="mb-8">
-        <div class="relative mb-2">
-          <input
-            [(ngModel)]="query"
-            (ngModelChange)="onQueryChange($event)"
-            (keydown.enter)="importFromInput()"
-            placeholder="Rechercher un tournoi ou coller un lien start.gg…"
-            class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-          />
-          @if (searching()) {
-            <span class="absolute right-3 top-3 text-gray-500 text-xs">Recherche...</span>
+      <div class="flex-1 min-w-0 w-full flex flex-col gap-6">
+        <h1 class="text-4xl font-bold">Tournois</h1>
+
+        <!-- Import -->
+        <section class="card p-5 flex flex-col gap-3" aria-labelledby="titre-import">
+          <label id="titre-import" for="recherche-tournoi" class="label !mb-0">Importer un tournoi</label>
+          <div class="relative">
+            <input
+              id="recherche-tournoi"
+              [(ngModel)]="query"
+              (ngModelChange)="onQueryChange($event)"
+              (keydown.enter)="importFromInput()"
+              placeholder="Lien start.gg ou nom du tournoi"
+              class="field w-full pr-28"
+            />
+            @if (searching()) {
+              <span class="absolute right-3 top-3.5 text-gray-400 text-xs">Recherche…</span>
+            }
+          </div>
+
+          @if (isUrl()) {
+            <div class="flex items-center gap-3 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2">
+              <span class="text-sm text-gray-300 flex-1 truncate">Lien reconnu : <span class="text-gray-100 font-mono">{{ extractedSlug() }}</span></span>
+              <button (click)="importSlug(extractedSlug())" [disabled]="importing() === extractedSlug()" class="btn btn-primary btn-sm">
+                {{ importing() === extractedSlug() ? 'Import…' : 'Importer' }}
+              </button>
+            </div>
           }
-        </div>
 
-        @if (isUrl()) {
-          <div class="flex items-center gap-3 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3">
-            <span class="text-sm text-gray-300 flex-1 truncate">Slug détecté : <span class="text-white font-mono">{{ extractedSlug() }}</span></span>
-            <button
-              (click)="importSlug(extractedSlug())"
-              [disabled]="importing() === extractedSlug()"
-              class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors shrink-0"
-            >
-              {{ importing() === extractedSlug() ? 'Import...' : 'Importer' }}
-            </button>
-          </div>
-        }
-
-        @if (searchResults().length) {
-          <div class="mt-2 border border-gray-700 rounded-xl overflow-hidden">
-            @for (result of searchResults(); track result.id) {
-              <div class="flex items-center justify-between px-4 py-3 bg-gray-900 hover:bg-gray-800 border-b border-gray-800 last:border-0">
-                <div>
-                  <div class="text-sm font-medium">{{ result.name }}</div>
-                  <div class="text-xs text-gray-400 mt-0.5">
-                    {{ periode(result) }}
-                    @if (lieu(result)) {
-                      <span class="text-gray-600"> · </span>{{ lieu(result) }}
-                    }
-                    @if (result.numAttendees) {
-                      <span class="text-gray-600"> · </span>{{ result.numAttendees }} inscrits
-                    }
+          @if (searchResults().length) {
+            <ul class="border border-gray-800 rounded-lg overflow-hidden divide-y divide-gray-800">
+              @for (result of searchResults(); track result.id) {
+                <li class="flex items-center justify-between gap-4 px-4 py-3 bg-gray-900">
+                  <div class="min-w-0">
+                    <div class="text-sm font-medium truncate">{{ result.name }}</div>
+                    <div class="text-xs text-gray-400 mt-0.5">
+                      {{ periode(result) }}
+                      @if (lieu(result)) { · {{ lieu(result) }} }
+                      @if (result.numAttendees) { · {{ result.numAttendees }} inscrits }
+                    </div>
                   </div>
-                  <div class="text-xs text-gray-600 font-mono mt-0.5">{{ result.slug }}</div>
-                </div>
-                <button
-                  (click)="importSlug(result.slug)"
-                  [disabled]="importing() === result.slug || alreadyImported(result.slug)"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ml-4"
-                  [class]="alreadyImported(result.slug)
-                    ? 'bg-green-900 text-green-400 cursor-default'
-                    : 'bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white'"
-                >
-                  {{ alreadyImported(result.slug) ? '✓ Importé' : importing() === result.slug ? 'Import...' : 'Importer' }}
-                </button>
-              </div>
-            }
-          </div>
-        }
+                  @if (alreadyImported(result.slug)) {
+                    <span class="flex items-center gap-1.5 text-xs text-accent shrink-0">
+                      <app-icon name="check" [size]="16" /> Importé
+                    </span>
+                  } @else {
+                    <button (click)="importSlug(result.slug)" [disabled]="importing() === result.slug" class="btn btn-secondary btn-sm shrink-0">
+                      {{ importing() === result.slug ? 'Import…' : 'Importer' }}
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+          }
 
-        @if (importError()) {
-          <p class="text-red-400 text-xs mt-2">{{ importError() }}</p>
-        }
-        @if (importSuccess()) {
-          <p class="text-green-400 text-xs mt-2">✓ {{ importSuccess() }}</p>
-        }
-      </div>
+          @if (importError()) {
+            <p class="text-alert-text text-xs">{{ importError() }}</p>
+          }
+          @if (importSuccess()) {
+            <p class="text-accent text-xs">{{ importSuccess() }}</p>
+          }
+        </section>
 
-      <!-- Tabs -->
-      <div class="flex gap-1 mb-6 border-b border-gray-800">
-        <button (click)="activeTab.set('active')"
-          [class]="activeTab() === 'active' ? 'px-4 py-2 text-sm font-medium border-b-2 border-white text-white' : 'px-4 py-2 text-sm text-gray-500 hover:text-gray-300'">
-          Actifs
-          @if (tournaments().length) { <span class="ml-1.5 text-xs opacity-60">{{ tournaments().length }}</span> }
-        </button>
-        <button (click)="switchToArchived()"
-          [class]="activeTab() === 'archived' ? 'px-4 py-2 text-sm font-medium border-b-2 border-white text-white' : 'px-4 py-2 text-sm text-gray-500 hover:text-gray-300'">
-          Archives
-          @if (archivedTournaments().length) { <span class="ml-1.5 text-xs opacity-60">{{ archivedTournaments().length }}</span> }
-        </button>
-      </div>
-
-      <!-- Active tournaments -->
-      @if (activeTab() === 'active') {
-        @if (loading()) {
-          <p class="text-gray-400">Chargement...</p>
-        } @else {
-          <div class="grid gap-3 mb-12">
-            @for (t of tournaments(); track t.id) {
-              <div class="flex items-center justify-between bg-gray-900 rounded-xl p-4 border border-gray-800 group">
-                <a [routerLink]="['/tournaments', t.slug]" class="flex-1 hover:opacity-80 transition-opacity">
-                  <div class="font-medium">{{ t.name }}</div>
-                  <div class="text-xs text-gray-500 font-mono mt-0.5">{{ t.slug }}</div>
-                </a>
-                <div class="flex items-center gap-2">
-                  <button (click)="archiveTournament(t)"
-                    [disabled]="archivingId() === t.id"
-                    class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-400 hover:text-gray-200 rounded-lg text-xs transition-colors opacity-0 group-hover:opacity-100">
-                    {{ archivingId() === t.id ? '...' : 'Archiver' }}
-                  </button>
-                  <a [routerLink]="['/tournaments', t.slug]" class="text-gray-600 text-lg">→</a>
-                </div>
-              </div>
-            } @empty {
-              <p class="text-gray-500 text-sm">Aucun tournoi actif.</p>
-            }
-          </div>
-        }
-      }
-
-      <!-- Archived tournaments -->
-      @if (activeTab() === 'archived') {
-        @if (loadingArchived()) {
-          <p class="text-gray-400">Chargement...</p>
-        } @else {
-          <div class="grid gap-3 mb-12">
-            @for (t of archivedTournaments(); track t.id) {
-              <div class="flex items-center justify-between bg-gray-900 rounded-xl p-4 border border-gray-800 group opacity-70 hover:opacity-100 transition-opacity">
-                <a [routerLink]="['/tournaments', t.slug]" class="flex-1">
-                  <div class="font-medium">{{ t.name }}</div>
-                  <div class="text-xs text-gray-500 font-mono mt-0.5">{{ t.slug }}</div>
-                </a>
-                <div class="flex items-center gap-2">
-                  <button (click)="unarchiveTournament(t)"
-                    [disabled]="archivingId() === t.id"
-                    class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-400 hover:text-gray-200 rounded-lg text-xs transition-colors opacity-0 group-hover:opacity-100">
-                    {{ archivingId() === t.id ? '...' : 'Restaurer' }}
-                  </button>
-                  <a [routerLink]="['/tournaments', t.slug]" class="text-gray-600 text-lg">→</a>
-                </div>
-              </div>
-            } @empty {
-              <p class="text-gray-500 text-sm">Aucun tournoi archivé.</p>
-            }
-          </div>
-        }
-      }
-
-      <!-- YouTube accounts section -->
-      <div class="border-t border-gray-800 pt-8">
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <h2 class="text-base font-semibold">Comptes YouTube</h2>
-            <p class="text-xs text-gray-500 mt-0.5">Connecte les chaînes YouTube qui recevront les clips.</p>
-          </div>
-          <button
-            (click)="connectYoutube()"
-            [disabled]="connectingYoutube()"
-            class="px-4 py-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
-          >
-            {{ connectingYoutube() ? '...' : '+ Connecter une chaîne' }}
+        <!-- Onglets -->
+        <div role="group" aria-label="Filtrer les tournois" class="self-start flex bg-gray-900 border border-gray-800 rounded-lg p-1">
+          <button (click)="activeTab.set('active')" [attr.aria-pressed]="activeTab() === 'active'"
+            class="h-9 px-4 rounded-md text-sm transition-colors"
+            [class]="activeTab() === 'active' ? 'bg-gray-800 text-gray-100' : 'text-gray-400 hover:text-gray-100'">
+            Actifs <span class="font-mono text-gray-400 ml-1">{{ tournaments().length }}</span>
+          </button>
+          <button (click)="switchToArchived()" [attr.aria-pressed]="activeTab() === 'archived'"
+            class="h-9 px-4 rounded-md text-sm transition-colors"
+            [class]="activeTab() === 'archived' ? 'bg-gray-800 text-gray-100' : 'text-gray-400 hover:text-gray-100'">
+            Archivés
+            @if (archivedTournaments().length) { <span class="font-mono text-gray-400 ml-1">{{ archivedTournaments().length }}</span> }
           </button>
         </div>
 
-        @if (loadingAccounts()) {
-          <p class="text-gray-500 text-sm">Chargement...</p>
-        } @else if (youtubeAccounts().length === 0) {
-          <p class="text-gray-600 text-sm">Aucune chaîne connectée.</p>
-        } @else {
-          <div class="grid gap-2">
-            @for (account of youtubeAccounts(); track account.id) {
-              <div class="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
-                <div class="flex items-center gap-3">
-                  <div class="w-8 h-8 rounded-full bg-red-800 flex items-center justify-center text-sm font-bold">
-                    {{ account.channelName[0] }}
-                  </div>
-                  <div>
-                    <div class="text-sm font-medium">{{ account.channelName }}</div>
-                    <div class="text-xs text-gray-500 font-mono">{{ account.channelId }}</div>
-                  </div>
-                </div>
-                <button
-                  (click)="disconnectAccount(account.id)"
-                  [disabled]="disconnectingId() === account.id"
-                  class="px-3 py-1.5 bg-gray-800 hover:bg-red-900 disabled:opacity-50 text-gray-400 hover:text-red-300 rounded-lg text-xs transition-colors"
-                >
-                  {{ disconnectingId() === account.id ? '...' : 'Déconnecter' }}
-                </button>
-              </div>
-            }
-          </div>
+        <!-- Liste -->
+        @if (activeTab() === 'active') {
+          @if (loading()) {
+            <p class="text-gray-400 text-sm">Chargement…</p>
+          } @else {
+            <ul class="flex flex-col gap-3">
+              @for (t of tournaments(); track t.id) {
+                <li class="card group flex items-center gap-4 pr-4 hover:border-gray-700 transition-colors">
+                  <a [routerLink]="['/tournaments', t.slug]" class="flex-1 min-w-0 flex items-center gap-4 px-6 py-5">
+                    <span class="flex-1 min-w-0 flex flex-col gap-1">
+                      <span class="text-xl font-semibold truncate">{{ t.name }}</span>
+                      <span class="text-sm text-gray-400">
+                        @if (t.startAt) { {{ dateLongue(t.startAt) }} · }<span class="font-mono">{{ t.slug }}</span>
+                      </span>
+                    </span>
+                    <app-icon name="chevron-right" class="text-gray-400" />
+                  </a>
+                  <button (click)="archiveTournament(t)" [disabled]="archivingId() === t.id"
+                    class="btn btn-secondary btn-sm opacity-0 group-hover:opacity-100 focus:opacity-100" [attr.aria-label]="'Archiver ' + t.name">
+                    <app-icon name="archive" [size]="16" />
+                    {{ archivingId() === t.id ? '…' : 'Archiver' }}
+                  </button>
+                </li>
+              } @empty {
+                <li class="text-gray-400 text-sm">Aucun tournoi actif. Importe-en un ci-dessus.</li>
+              }
+            </ul>
+          }
+        }
+
+        @if (activeTab() === 'archived') {
+          @if (loadingArchived()) {
+            <p class="text-gray-400 text-sm">Chargement…</p>
+          } @else {
+            <ul class="flex flex-col gap-3">
+              @for (t of archivedTournaments(); track t.id) {
+                <li class="card flex items-center gap-4 pr-4 border-dashed">
+                  <a [routerLink]="['/tournaments', t.slug]" class="flex-1 min-w-0 px-6 py-4">
+                    <span class="block text-base font-medium text-gray-300 truncate">{{ t.name }}</span>
+                    <span class="block text-xs text-gray-400 font-mono mt-0.5">{{ t.slug }}</span>
+                  </a>
+                  <button (click)="unarchiveTournament(t)" [disabled]="archivingId() === t.id" class="btn btn-secondary btn-sm">
+                    {{ archivingId() === t.id ? '…' : 'Restaurer' }}
+                  </button>
+                </li>
+              } @empty {
+                <li class="text-gray-400 text-sm">Aucun tournoi archivé.</li>
+              }
+            </ul>
+          }
         }
       </div>
-    </div>
+
+      <!-- Ressources -->
+      <aside id="youtube" aria-labelledby="titre-ressources" class="w-full xl:w-[360px] shrink-0 flex flex-col gap-4 xl:mt-16">
+        <h2 id="titre-ressources" class="eyebrow">Ressources</h2>
+
+        @if (disque(); as d) {
+          <section class="card p-5 flex flex-col gap-3">
+            <div class="flex justify-between text-sm">
+              <span>Disque du serveur</span>
+              <span class="font-mono" [class]="d.critique ? 'text-alert-text' : ''">{{ d.utilise }} / {{ d.total }}</span>
+            </div>
+            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div class="h-full" [class]="d.critique ? 'bg-alert' : 'bg-gray-100'" [style.width.%]="d.pct"></div>
+            </div>
+            <p class="text-xs text-gray-400 leading-relaxed">
+              {{ d.libre }} libres. Une VOD de dix heures en demande près du double pendant son remux.
+            </p>
+          </section>
+        }
+
+        <section class="card p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm">Chaînes YouTube</span>
+            <button (click)="connectYoutube()" [disabled]="connectingYoutube()" class="btn btn-youtube btn-sm">
+              <app-icon name="plus" [size]="16" />
+              {{ connectingYoutube() ? '…' : 'Connecter' }}
+            </button>
+          </div>
+
+          @if (loadingAccounts()) {
+            <p class="text-gray-400 text-sm">Chargement…</p>
+          } @else if (youtubeAccounts().length === 0) {
+            <p class="text-alert-text text-sm">Aucune chaîne connectée : les clips ne pourront pas être envoyés.</p>
+          } @else {
+            <ul class="flex flex-col gap-2">
+              @for (account of youtubeAccounts(); track account.id) {
+                <li class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-semibold shrink-0">
+                    {{ account.channelName[0] }}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm truncate">{{ account.channelName }}</div>
+                    <div class="text-xs text-accent">Connectée</div>
+                  </div>
+                  <button (click)="disconnectAccount(account.id)" [disabled]="disconnectingId() === account.id" class="btn btn-danger btn-sm">
+                    {{ disconnectingId() === account.id ? '…' : 'Déconnecter' }}
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+
+          <p class="text-xs text-gray-400 leading-relaxed border-t border-gray-800 pt-3">
+            Une chaîne a son propre plafond de mises en ligne quotidien, indépendant du quota de l'API.
+          </p>
+        </section>
+      </aside>
+
+    </main>
   `,
 })
 export class TournamentsPage implements OnInit {
@@ -220,7 +225,26 @@ export class TournamentsPage implements OnInit {
 
   private searchTimer: any;
 
+  private readonly stockage = signal<StorageInfo | null>(null);
+  readonly disque = computed(() => {
+    const s = this.stockage();
+    if (!s || s.totalBytes <= 0) return null;
+    const go = (octets: number) => Math.round(octets / 1e9) + ' Go';
+    return {
+      pct: Math.round((s.usedBytes / s.totalBytes) * 100),
+      utilise: go(s.usedBytes),
+      total: go(s.totalBytes),
+      libre: go(s.freeBytes),
+      critique: s.freeBytes < 20e9,
+    };
+  });
+
+  dateLongue(iso: string): string {
+    return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
   ngOnInit() {
+    this.api.getStorage().subscribe({ next: (s) => this.stockage.set(s), error: () => undefined });
     this.api.getTournaments().subscribe({
       next: (data) => { this.tournaments.set(data); this.loading.set(false); },
       error: () => this.loading.set(false),

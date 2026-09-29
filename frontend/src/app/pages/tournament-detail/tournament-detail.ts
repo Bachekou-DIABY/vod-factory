@@ -2,215 +2,171 @@ import { Component, inject, signal, OnInit, computed } from '@angular/core';
 import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService, Tournament, Vod, StartGGEvent } from '../../services/api.service';
+import { IconComponent } from '../../components/icon';
+import { statutVod } from '../../components/vod-status';
 
 @Component({
   selector: 'app-tournament-detail',
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, IconComponent],
   template: `
-    <div class="min-h-screen bg-gray-950 text-white p-8">
-      <a routerLink="/" class="text-sm text-gray-500 hover:text-gray-300 mb-6 inline-block">← Tournois</a>
+    <main class="px-6 lg:px-10 py-8 max-w-[1440px] mx-auto flex flex-col gap-6">
+      <a routerLink="/" class="self-start flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-100">
+        <app-icon name="arrow-left" [size]="16" /> Tournois
+      </a>
 
       @if (loading()) {
-        <p class="text-gray-400">Chargement...</p>
+        <p class="text-gray-400 text-sm">Chargement…</p>
       } @else {
-        <div class="flex items-center justify-between mb-6">
-          <h1 class="text-2xl font-bold">{{ tournament()?.name ?? slug }}</h1>
-          <div class="flex gap-2">
-            <a [routerLink]="['/tournaments', slug, 'approved']"
-              class="px-4 py-2 bg-green-800 hover:bg-green-700 text-green-200 rounded-lg text-sm font-medium transition-colors">
-              ✓ Clips approuvés
-            </a>
-            <button
-              (click)="showAddForm.set(!showAddForm())"
-              class="px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded-lg text-sm font-medium transition-colors"
-            >
-              + Importer VOD
-            </button>
+        <div class="flex flex-wrap items-end gap-4">
+          <div class="flex-1 min-w-0 flex flex-col gap-2">
+            <span class="eyebrow">Tournoi</span>
+            <h1 class="text-4xl font-bold truncate">{{ tournament()?.name ?? slug }}</h1>
           </div>
+          <a [routerLink]="['/tournaments', slug, 'approved']" class="btn btn-secondary">
+            <app-icon name="list" [size]="16" /> Clips approuvés
+          </a>
+          <button (click)="showAddForm.set(!showAddForm())" class="btn btn-primary" [attr.aria-expanded]="showAddForm()">
+            <app-icon name="plus" [size]="16" /> Importer une VOD
+          </button>
         </div>
 
-
-        <!-- Add VOD form -->
+        <!-- Import d'une VOD -->
         @if (showAddForm()) {
-          <div class="mb-8 bg-gray-900 border border-gray-700 rounded-xl p-5">
-            <h2 class="text-sm font-semibold text-gray-300 mb-1">Importer une VOD</h2>
-            <p class="text-xs text-gray-500 mb-4">
-              Associe une VOD à cet event Start.gg pour pouvoir générer des clips automatiquement.
-              <span class="text-gray-600">Les clips sont calculés à partir des timestamps des sets.</span>
-            </p>
-
-            <!-- Mode toggle -->
-            <div class="flex gap-1 mb-4 bg-gray-800 rounded-lg p-1 w-fit">
-              <button (click)="importMode.set('url')"
-                [class]="importMode() === 'url' ? 'px-3 py-1.5 bg-gray-700 rounded text-sm font-medium text-white' : 'px-3 py-1.5 text-sm text-gray-400 hover:text-gray-300'">
-                URL
-              </button>
-              <button (click)="importMode.set('file')"
-                [class]="importMode() === 'file' ? 'px-3 py-1.5 bg-gray-700 rounded text-sm font-medium text-white' : 'px-3 py-1.5 text-sm text-gray-400 hover:text-gray-300'">
-                Fichier local
-              </button>
+          <section class="card p-6 flex flex-col gap-5" aria-labelledby="titre-ajout">
+            <div class="flex flex-col gap-1">
+              <h2 id="titre-ajout" class="text-xl font-semibold">Importer une VOD</h2>
+              <p class="text-sm text-gray-400">
+                Un lien Twitch est téléchargé par le serveur et calé automatiquement. YouTube bloque le serveur : pour une VOD YouTube, télécharge-la sur ton poste puis envoie le fichier.
+              </p>
             </div>
 
-            <div class="grid grid-cols-1 gap-3 mb-3">
-              <!-- URL mode -->
-              @if (importMode() === 'url') {
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">URL Twitch / YouTube</label>
-                  <input
-                    [(ngModel)]="newVodUrl"
-                    placeholder="https://www.twitch.tv/videos/..."
-                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              }
+            <div role="group" aria-label="Source de la VOD" class="self-start flex bg-gray-800 border border-gray-700 rounded-lg p-1">
+              <button (click)="importMode.set('url')" [attr.aria-pressed]="importMode() === 'url'"
+                class="h-9 px-4 rounded-md text-sm transition-colors"
+                [class]="importMode() === 'url' ? 'bg-gray-700 text-gray-100' : 'text-gray-400 hover:text-gray-100'">Lien</button>
+              <button (click)="importMode.set('file')" [attr.aria-pressed]="importMode() === 'file'"
+                class="h-9 px-4 rounded-md text-sm transition-colors"
+                [class]="importMode() === 'file' ? 'bg-gray-700 text-gray-100' : 'text-gray-400 hover:text-gray-100'">Fichier</button>
+            </div>
 
-              <!-- File mode -->
-              @if (importMode() === 'file') {
+            @if (importMode() === 'url') {
+              <div>
+                <label for="vod-url" class="label">Lien de la VOD</label>
+                <input id="vod-url" [(ngModel)]="newVodUrl" placeholder="https://www.twitch.tv/videos/…" class="field w-full" />
+              </div>
+            }
+
+            @if (importMode() === 'file') {
+              <div class="flex flex-col gap-4">
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Fichier vidéo</label>
-                  <p class="text-xs text-gray-600 mb-2">
-                    Pour que les clips soient bien alignés, tu devras renseigner l'heure de début du stream
-                    (timestamp Unix) dans la page de la VOD après import.
-                  </p>
+                  <span class="label">Fichier vidéo</span>
                   <div class="flex items-center gap-3">
-                    <label class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium cursor-pointer transition-colors">
+                    <label class="btn btn-secondary cursor-pointer">
                       Choisir un fichier
-                      <input type="file" accept="video/*" class="hidden" (change)="onFileSelected($event)" />
+                      <input type="file" accept="video/*" class="sr-only" (change)="onFileSelected($event)" />
                     </label>
                     @if (selectedFile()) {
-                      <span class="text-sm text-gray-300 truncate max-w-xs">{{ selectedFile()!.name }}</span>
-                      <span class="text-xs text-gray-500 shrink-0">{{ (selectedFile()!.size / 1024 / 1024 / 1024).toFixed(2) }} Go</span>
+                      <span class="text-sm text-gray-100 truncate max-w-xs">{{ selectedFile()!.name }}</span>
+                      <span class="text-xs text-gray-400 font-mono shrink-0">{{ (selectedFile()!.size / 1024 / 1024 / 1024).toFixed(2) }} Go</span>
                     } @else {
-                      <span class="text-sm text-gray-600">Aucun fichier sélectionné</span>
+                      <span class="text-sm text-gray-400">Aucun fichier choisi</span>
                     }
                   </div>
-                  <div class="mt-3">
-                    <label class="block text-xs text-gray-500 mb-1">
-                      URL du stream original
-                      <span class="text-gray-600 ml-1">(optionnel — Twitch ou YouTube, pour récupérer l'heure de début automatiquement)</span>
-                    </label>
-                    <input
-                      [(ngModel)]="fileSourceStreamUrl"
-                      placeholder="https://www.twitch.tv/videos/... ou YouTube"
-                      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
                   @if (uploadProgress() > 0 && uploadProgress() < 100) {
-                    <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div class="h-full bg-blue-500 transition-all" [style.width.%]="uploadProgress()"></div>
+                    <div class="mt-3 flex items-center gap-3">
+                      <div class="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div class="h-full bg-accent transition-all" [style.width.%]="uploadProgress()"></div>
+                      </div>
+                      <span class="text-xs text-gray-400 font-mono">{{ uploadProgress() }} %</span>
                     </div>
-                    <p class="text-xs text-gray-500 mt-1">Upload : {{ uploadProgress() }}%</p>
-                  }
-                </div>
-              }
-
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">Event Start.gg</label>
-                  @if (loadingEvents()) {
-                    <div class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-500">Chargement...</div>
-                  } @else if (events().length) {
-                    <select
-                      [(ngModel)]="newVodEventId"
-                      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="">— Aucun event —</option>
-                      @for (groupe of eventsParJeu(); track groupe.jeu) {
-                        <optgroup [label]="groupe.jeu">
-                          @for (ev of groupe.events; track ev.id) {
-                            <option [value]="ev.id">{{ ev.name }}{{ ev.jour ? ' · ' + ev.jour : '' }}</option>
-                          }
-                        </optgroup>
-                      }
-                    </select>
-                  } @else {
-                    <input
-                      [(ngModel)]="newVodEventId"
-                      placeholder="eventStartGGId"
-                      class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                    />
                   }
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Stream Twitch (optionnel)</label>
-                  <input
-                    [(ngModel)]="newVodStreamName"
-                    placeholder="ex: mon_stream"
-                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                  />
+                  <label for="vod-stream-url" class="label">Lien du stream d'origine <span class="text-gray-500">(facultatif, pour caler l'heure de début)</span></label>
+                  <input id="vod-stream-url" [(ngModel)]="fileSourceStreamUrl" placeholder="https://www.twitch.tv/videos/…" class="field w-full" />
                 </div>
               </div>
+            }
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label for="vod-event" class="label">Event Start.gg</label>
+                @if (loadingEvents()) {
+                  <div class="field flex items-center text-gray-400">Chargement…</div>
+                } @else if (events().length) {
+                  <select id="vod-event" [(ngModel)]="newVodEventId" class="field w-full">
+                    <option value="">Aucun event</option>
+                    @for (groupe of eventsParJeu(); track groupe.jeu) {
+                      <optgroup [label]="groupe.jeu">
+                        @for (ev of groupe.events; track ev.id) {
+                          <option [value]="ev.id">{{ ev.name }}{{ ev.jour ? ' · ' + ev.jour : '' }}</option>
+                        }
+                      </optgroup>
+                    }
+                  </select>
+                } @else {
+                  <input id="vod-event" [(ngModel)]="newVodEventId" placeholder="Identifiant de l'event" class="field w-full" />
+                }
+              </div>
+              <div>
+                <label for="vod-stream" class="label">Chaîne sur Start.gg <span class="text-gray-500">(facultatif)</span></label>
+                <input id="vod-stream" [(ngModel)]="newVodStreamName" placeholder="ex. NauBody" class="field w-full" />
+              </div>
             </div>
-            <div class="flex gap-3 items-center">
-              <button
-                (click)="importMode() === 'file' ? addVodFile() : addVod()"
+
+            <div class="flex items-center gap-3">
+              <button (click)="importMode() === 'file' ? addVodFile() : addVod()"
                 [disabled]="(importMode() === 'url' ? !newVodUrl : !selectedFile()) || addingVod()"
-                class="px-4 py-2 bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
-              >
-                {{ addingVod() ? 'Import en cours...' : 'Ajouter' }}
+                class="btn btn-primary">
+                {{ addingVod() ? 'Import en cours…' : 'Importer' }}
               </button>
+              <button (click)="showAddForm.set(false)" class="btn btn-secondary">Annuler</button>
               @if (addError()) {
-                <p class="text-red-400 text-xs">{{ addError() }}</p>
+                <p class="text-alert-text text-sm">{{ addError() }}</p>
               }
             </div>
-          </div>
+          </section>
         }
 
-        <!-- VODs grouped by event -->
+        <!-- VODs par event -->
         @if (vodsByEvent().length === 0) {
-          <p class="text-gray-500">Aucune VOD pour ce tournoi.</p>
+          <p class="text-gray-400 text-sm">Aucune VOD pour ce tournoi.</p>
         }
 
         @for (group of vodsByEvent(); track group.eventId) {
-          <div class="mb-8">
-            <!-- Event header -->
-            <div class="flex items-center gap-3 mb-3">
-              <h2 class="text-base font-semibold text-gray-200">
-                {{ group.eventName }}
-              </h2>
-              <span class="text-xs text-gray-600 font-mono">id: {{ group.eventId }}</span>
+          <section class="flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+              <h2 class="text-lg font-semibold">{{ group.eventName }}</h2>
+              <span class="text-xs text-gray-400 font-mono">{{ group.eventId }}</span>
               <div class="flex-1 h-px bg-gray-800"></div>
             </div>
 
-            <!-- VODs in this event, grouped by stream -->
             @for (streamGroup of group.streams; track streamGroup.streamName) {
               @if (streamGroup.streamName) {
-                <div class="text-xs text-gray-500 mb-2 ml-1">
-                  📺 {{ streamGroup.streamName }}
+                <div class="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
+                  <app-icon name="youtube" [size]="14" /> Chaîne {{ streamGroup.streamName }}
                 </div>
               }
-              <div class="grid gap-3 mb-4">
+              <ul class="flex flex-col gap-3">
                 @for (vod of streamGroup.vods; track vod.id) {
-                  <div class="flex items-center gap-2 bg-gray-900 rounded-xl border border-gray-800 hover:border-gray-700 transition-colors">
-                    <a
-                      [routerLink]="['/vods', vod.id]"
-                      class="flex-1 min-w-0 p-4"
-                    >
-                      <div class="flex items-center justify-between">
-                        <div class="truncate max-w-xl text-sm text-gray-300">{{ vod.name || vod.sourceUrl }}</div>
-                        <span class="ml-4 shrink-0 px-3 py-1 rounded-full text-xs font-medium"
-                          [class]="statusClass(vod.status)">{{ vod.status }}</span>
-                      </div>
-                      @if (vod.streamName) {
-                        <div class="text-xs text-gray-600 mt-1">{{ vod.streamName }}</div>
-                      }
+                  <li class="card flex items-center gap-2 hover:border-gray-700 transition-colors">
+                    <a [routerLink]="['/vods', vod.id]" class="flex-1 min-w-0 flex items-center gap-4 px-5 py-4">
+                      <span class="flex-1 min-w-0 truncate">{{ vod.name || vod.sourceUrl }}</span>
+                      <span class="shrink-0 px-2.5 py-1 rounded-md text-xs font-medium" [class]="statut(vod.status).classes">{{ statut(vod.status).label }}</span>
+                      <app-icon name="chevron-right" class="text-gray-400" />
                     </a>
-                    <button
-                      (click)="deleteVod(vod.id)"
-                      [disabled]="deletingVodId() === vod.id"
-                      class="shrink-0 mr-3 px-2 py-1.5 bg-red-950 hover:bg-red-800 disabled:opacity-50 text-red-400 rounded-lg text-xs transition-colors"
-                      title="Supprimer cette VOD"
-                    >
-                      {{ deletingVodId() === vod.id ? '...' : '🗑' }}
+                    <button (click)="deleteVod(vod.id)" [disabled]="deletingVodId() === vod.id"
+                      class="btn btn-danger btn-sm mr-3" [attr.aria-label]="'Supprimer ' + (vod.name || 'cette VOD')">
+                      @if (deletingVodId() === vod.id) { … } @else { <app-icon name="trash" [size]="16" /> }
                     </button>
-                  </div>
+                  </li>
                 }
-              </div>
+              </ul>
             }
-          </div>
+          </section>
         }
       }
-    </div>
+    </main>
   `,
 })
 export class TournamentDetailPage implements OnInit {
@@ -389,18 +345,6 @@ export class TournamentDetailPage implements OnInit {
     });
   }
 
-  statusClass(status: string): string {
-    const map: Record<string, string> = {
-      PENDING: 'bg-gray-700 text-gray-300',
-      DOWNLOADING: 'bg-blue-900 text-blue-300',
-      DOWNLOADED: 'bg-cyan-800 text-cyan-300',
-      ANALYZING: 'bg-yellow-900 text-yellow-300',
-      ANALYZED: 'bg-green-900 text-green-300',
-      PROCESSING: 'bg-purple-900 text-purple-300',
-      PROCESSED: 'bg-blue-700 text-blue-200',
-      COMPLETED: 'bg-green-700 text-green-200',
-      FAILED: 'bg-red-900 text-red-300',
-    };
-    return map[status] ?? 'bg-gray-700 text-gray-300';
-  }
+  readonly statut = statutVod;
+
 }

@@ -2,240 +2,158 @@ import { Component, inject, signal, OnInit, ViewChild, ElementRef } from '@angul
 import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService, Clip } from '../../services/api.service';
+import { IconComponent } from '../../components/icon';
+import { statutClip } from '../../components/vod-status';
 
 @Component({
   selector: 'app-clip-review',
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, IconComponent],
   template: `
-    <div class="min-h-screen bg-gray-950 text-white p-8">
-      <a [routerLink]="['/vods', clip()?.vodId]" fragment="clips-section" class="text-sm text-gray-500 hover:text-gray-300 mb-6 inline-block">← VOD</a>
+    <main class="px-6 lg:px-10 py-8 max-w-[1440px] mx-auto flex flex-col gap-6">
+      <a [routerLink]="['/vods', clip()?.vodId]" fragment="clips-section" class="self-start flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-100">
+        <app-icon name="arrow-left" [size]="16" /> VOD
+      </a>
 
       @if (loading()) {
-        <p class="text-gray-400">Chargement...</p>
+        <p class="text-gray-400 text-sm">Chargement…</p>
       } @else if (clip(); as c) {
-        <div class="max-w-4xl">
-          <div class="flex items-center justify-between mb-4">
-            <h1 class="text-2xl font-bold">Set {{ c.setOrder }} — {{ c.roundName ?? 'Clip' }}</h1>
-            <span class="px-3 py-1 rounded-full text-xs font-medium" [class]="statusClass(c.status)">
-              {{ c.status }}
-            </span>
+        <div class="flex flex-wrap items-end gap-4">
+          <div class="flex-1 min-w-0 flex flex-col gap-2">
+            <span class="eyebrow">Set {{ c.setOrder }}{{ c.roundName ? ' · ' + c.roundName : '' }}</span>
+            <h1 class="text-4xl font-bold truncate">{{ c.players ?? c.title ?? 'Clip' }}</h1>
+            @if (c.score) { <p class="text-sm text-gray-400">{{ c.score }}</p> }
           </div>
+          <span class="text-sm font-medium" [class]="statutClipAffiche(c.status).classes">{{ statutClipAffiche(c.status).label }}</span>
+        </div>
 
-          @if (c.players) {
-            <p class="text-gray-400 mb-4">{{ c.players }} — {{ c.score }}</p>
-          }
+        <div class="flex flex-col xl:flex-row gap-6 items-start">
+          <!-- Lecture et recoupe -->
+          <div class="flex-1 min-w-0 w-full flex flex-col gap-4">
+            <video #videoEl class="w-full aspect-video rounded-xl bg-black border border-gray-800" controls preload="metadata"
+              [src]="api.getStreamUrl(c.vodId)" (loadedmetadata)="onMetadata(c)" (timeupdate)="onTimeUpdate()"></video>
 
-          <!-- Player — full VOD, seeked to set start -->
-          <video
-            #videoEl
-            class="w-full rounded-xl mb-4 bg-black"
-            controls
-            preload="metadata"
-            [src]="api.getStreamUrl(c.vodId)"
-            (loadedmetadata)="onMetadata(c)"
-            (timeupdate)="onTimeUpdate()"
-          ></video>
-
-          <!-- Recut section -->
-          <div class="bg-gray-900 rounded-xl p-5 mb-6 border border-gray-800">
-            <div class="flex items-start justify-between mb-1">
-              <h3 class="text-sm font-semibold text-gray-200">Recouper le clip</h3>
-              <span class="text-xs text-gray-500 font-mono">
-                {{ toHMS(recutStart) }} — {{ toHMS(recutEnd) }}
-                <span class="text-gray-600 ml-1">({{ toHMS(recutEnd - recutStart) }})</span>
-              </span>
-            </div>
-            <p class="text-xs text-gray-500 mb-4">
-              Les poignées sont pré-positionnées sur le début et la fin du set. Ajuste-les puis clique sur "Recouper".
-            </p>
-
-            <!-- Custom dual-handle slider — full VOD range -->
-            <div
-              class="relative h-10 flex items-center mb-4 cursor-pointer select-none"
-              #sliderTrack
-              (pointerdown)="onTrackPointerDown($event, sliderTrack)"
-            >
-              <!-- Track background -->
-              <div class="absolute inset-x-2 h-2 bg-gray-700 rounded-full"></div>
-              <!-- Selected range -->
-              <div
-                class="absolute h-2 bg-purple-600 rounded-full pointer-events-none"
-                [style.left]="thumbLeft(startPct())"
-                [style.right]="thumbRight(endPct())"
-              ></div>
-              <!-- Current time indicator -->
-              @if (videoDuration() > 0) {
-                <div
-                  class="absolute w-px h-4 bg-white/40 pointer-events-none"
-                  [style.left]="thumbLeft(currentPct())"
-                ></div>
-              }
-              <!-- Start thumb -->
-              <div
-                class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-purple-500 -translate-x-1/2 z-10 pointer-events-none"
-                [style.left]="thumbLeft(startPct())"
-              ></div>
-              <!-- End thumb -->
-              <div
-                class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-purple-400 -translate-x-1/2 z-10 pointer-events-none"
-                [style.left]="thumbLeft(endPct())"
-              ></div>
-            </div>
-
-            <!-- hh:mm:ss inputs + preview buttons -->
-            <div class="flex gap-4 items-center flex-wrap">
-              <div class="flex items-center gap-2">
-                <label class="text-xs text-gray-500 w-12 shrink-0">Début</label>
-                <input type="text" [value]="toHMS(recutStart)" (change)="onStartInput($event)"
-                  class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-purple-500 outline-none font-mono"
-                  placeholder="hh:mm:ss" />
+            <section class="card p-5 flex flex-col gap-4" aria-labelledby="titre-recoupe-clip">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="titre-recoupe-clip" class="text-sm font-semibold">Bornes du clip</h2>
+                  <p class="text-xs text-gray-400 mt-0.5">Pré-placées sur le début et la fin du set. Ajuste-les, puis recoupe.</p>
+                </div>
+                <span class="text-xs font-mono shrink-0">
+                  {{ toHMS(recutStart) }} → {{ toHMS(recutEnd) }} <span class="text-gray-400">({{ toHMS(recutEnd - recutStart) }})</span>
+                </span>
               </div>
-              <div class="flex items-center gap-2">
-                <label class="text-xs text-gray-500 w-12 shrink-0">Fin</label>
-                <input type="text" [value]="toHMS(recutEnd)" (change)="onEndInput($event)"
-                  class="w-28 bg-gray-800 rounded-lg px-2 py-1 text-sm border border-gray-700 focus:border-purple-500 outline-none font-mono"
-                  placeholder="hh:mm:ss" />
+
+              <div class="relative h-10 flex items-center cursor-pointer select-none" #sliderTrack (pointerdown)="onTrackPointerDown($event, sliderTrack)">
+                <div class="absolute inset-x-2 h-2 bg-gray-700 rounded-full"></div>
+                <div class="absolute h-2 bg-accent rounded-full pointer-events-none" [style.left]="thumbLeft(startPct())" [style.right]="thumbRight(endPct())"></div>
+                @if (videoDuration() > 0) {
+                  <div class="absolute w-px h-4 bg-white/50 pointer-events-none" [style.left]="thumbLeft(currentPct())"></div>
+                }
+                <div class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-accent -translate-x-1/2 z-10 pointer-events-none" [style.left]="thumbLeft(startPct())"></div>
+                <div class="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-accent -translate-x-1/2 z-10 pointer-events-none" [style.left]="thumbLeft(endPct())"></div>
               </div>
-              <button (click)="seekVideo(recutStart)"
-                class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
-                ⏮ Début
+
+              <div class="flex flex-wrap items-end gap-3">
+                <div>
+                  <label for="clip-debut" class="label">Début</label>
+                  <input id="clip-debut" type="text" [value]="toHMS(recutStart)" (change)="onStartInput($event)" class="field w-32 font-mono" placeholder="hh:mm:ss" />
+                </div>
+                <div>
+                  <label for="clip-fin" class="label">Fin</label>
+                  <input id="clip-fin" type="text" [value]="toHMS(recutEnd)" (change)="onEndInput($event)" class="field w-32 font-mono" placeholder="hh:mm:ss" />
+                </div>
+                <button (click)="seekVideo(recutStart)" class="btn btn-secondary btn-sm">Aller au début</button>
+                <button (click)="seekVideo(recutEnd - 5)" class="btn btn-secondary btn-sm">Aller à la fin</button>
+                <button (click)="setRecutStartFromCurrent()" class="btn btn-secondary btn-sm">Début ici</button>
+                <button (click)="setRecutEndFromCurrent()" class="btn btn-secondary btn-sm">Fin ici</button>
+              </div>
+
+              <button (click)="recut()" [disabled]="recutting()" class="btn btn-primary self-start">
+                <app-icon name="scissors" [size]="16" /> {{ recutting() ? 'Recoupe…' : 'Recouper le fichier' }}
               </button>
-              <button (click)="seekVideo(recutEnd - 5)"
-                class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
-                ⏭ Fin
-              </button>
-              <button (click)="setRecutStartFromCurrent()"
-                class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
-                📍 → Début
-              </button>
-              <button (click)="setRecutEndFromCurrent()"
-                class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">
-                📍 → Fin
-              </button>
-            </div>
+            </section>
           </div>
 
-          <!-- Metadata edit -->
-          <div class="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Titre</label>
-              <input [(ngModel)]="editTitle"
-                class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
-                placeholder="Titre du clip" />
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Round</label>
-              <input [(ngModel)]="editRound"
-                class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
-                placeholder="Winners Finals" />
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Joueurs</label>
-              <input [(ngModel)]="editPlayers"
-                class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
-                placeholder="Player1 vs Player2" />
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Score</label>
-              <input [(ngModel)]="editScore"
-                class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
-                placeholder="3 - 1" />
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Visibilité YouTube</label>
-              <select [(ngModel)]="editPrivacy"
-                class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none">
-                <option value="unlisted">Non répertorié</option>
-                <option value="public">Public</option>
-                <option value="private">Privé</option>
-              </select>
-            </div>
-            <div class="col-span-2">
-              <label class="block text-xs text-gray-500 mb-1">
-                Description YouTube
-                <span class="text-gray-600 ml-1">(auto-générée si vide)</span>
-              </label>
-              <textarea [(ngModel)]="editDescription" rows="4"
-                class="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none resize-none"
-                placeholder="Description qui apparaîtra sur YouTube..."></textarea>
-            </div>
-          </div>
-
-          <!-- Custom thumbnail -->
-          <div class="mb-6">
-            <label class="block text-xs text-gray-500 mb-2">Miniature personnalisée</label>
-            <div class="flex items-center gap-4">
-              @if (clip()?.thumbnailUrl) {
-                <img [src]="clip()?.thumbnailUrl" class="w-24 h-14 rounded object-cover bg-gray-800" />
-              }
-              <label class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs cursor-pointer transition-colors">
-                {{ uploadingThumb() ? 'Upload...' : '🖼️ Choisir une image' }}
-                <input type="file" accept="image/*" class="hidden" (change)="onThumbFile($event)" [disabled]="uploadingThumb()" />
-              </label>
-              @if (thumbMsg()) {
-                <span class="text-xs text-green-400">{{ thumbMsg() }}</span>
-              }
-            </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="flex gap-3 flex-wrap items-start justify-between">
-            <div class="flex flex-col gap-1">
-              <button (click)="recut()" [disabled]="recutting()"
-                class="px-5 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
-                {{ recutting() ? 'Recut en cours...' : '✂️ Recouper' }}
+          <!-- Métadonnées -->
+          <aside class="w-full xl:w-[440px] shrink-0 flex flex-col gap-4">
+            <section class="card p-6 flex flex-col gap-4" aria-labelledby="titre-infos">
+              <h2 id="titre-infos" class="text-xl font-semibold">Informations YouTube</h2>
+              <div>
+                <label for="edit-titre" class="label">Titre</label>
+                <input id="edit-titre" [(ngModel)]="editTitle" class="field w-full" placeholder="Titre du clip" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="edit-round" class="label">Round</label>
+                  <input id="edit-round" [(ngModel)]="editRound" class="field w-full" placeholder="Winners Final" />
+                </div>
+                <div>
+                  <label for="edit-score" class="label">Score</label>
+                  <input id="edit-score" [(ngModel)]="editScore" class="field w-full" placeholder="3 - 1" />
+                </div>
+              </div>
+              <div>
+                <label for="edit-joueurs" class="label">Joueurs</label>
+                <input id="edit-joueurs" [(ngModel)]="editPlayers" class="field w-full" placeholder="Joueur 1 vs Joueur 2" />
+              </div>
+              <div>
+                <label for="edit-desc" class="label">Description <span class="text-gray-500">(générée si vide)</span></label>
+                <textarea id="edit-desc" [(ngModel)]="editDescription" rows="4" class="field h-auto py-2.5 w-full resize-none"
+                  placeholder="Description qui apparaîtra sur YouTube"></textarea>
+              </div>
+              <div>
+                <label for="edit-visi" class="label">Visibilité</label>
+                <select id="edit-visi" [(ngModel)]="editPrivacy" class="field w-full">
+                  <option value="unlisted">Non répertoriée</option>
+                  <option value="public">Publique</option>
+                  <option value="private">Privée</option>
+                </select>
+              </div>
+              <div>
+                <span class="label">Miniature personnalisée</span>
+                <div class="flex items-center gap-3">
+                  @if (clip()?.thumbnailUrl) {
+                    <img [src]="clip()?.thumbnailUrl" alt="Miniature actuelle" class="w-28 aspect-video rounded-lg object-cover bg-gray-800" />
+                  }
+                  <label class="btn btn-secondary btn-sm cursor-pointer">
+                    {{ uploadingThumb() ? 'Envoi…' : 'Choisir une image' }}
+                    <input type="file" accept="image/*" class="sr-only" (change)="onThumbFile($event)" [disabled]="uploadingThumb()" />
+                  </label>
+                  @if (thumbMsg()) { <span class="text-xs text-accent">{{ thumbMsg() }}</span> }
+                </div>
+              </div>
+              <button (click)="save()" [disabled]="saving()" class="btn btn-secondary">
+                {{ saving() ? 'Enregistrement…' : 'Enregistrer' }}
               </button>
-              <span class="text-xs text-gray-600">Recoupe le fichier selon les bornes ci-dessus</span>
-            </div>
-            <div class="flex flex-col gap-1">
-              <button (click)="save()" [disabled]="saving()"
-                class="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
-                {{ saving() ? 'Sauvegarde...' : 'Sauvegarder' }}
-              </button>
-              <span class="text-xs text-gray-600">Sauvegarde le titre et le round</span>
-            </div>
-            @if (clip()?.status !== 'APPROVED') {
-              <div class="flex flex-col gap-1">
-                <button (click)="approve()" [disabled]="saving()"
-                  class="px-5 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
-                  Approuver ✓
+            </section>
+
+            <section class="card p-6 flex flex-col gap-3" aria-label="Décision">
+              @if (clip()?.status !== 'APPROVED') {
+                <button (click)="approve()" [disabled]="saving()" class="btn btn-primary">
+                  <app-icon name="check" [size]="16" /> Approuver pour YouTube
                 </button>
-                <span class="text-xs text-gray-600">Marque le clip comme prêt pour l'upload YouTube</span>
-              </div>
-            } @else {
-              <div class="flex flex-col gap-1">
-                <button (click)="disapprove()" [disabled]="saving()"
-                  class="px-5 py-2 bg-yellow-700 hover:bg-yellow-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
-                  Désapprouver
+              } @else {
+                <button (click)="disapprove()" [disabled]="saving()" class="btn btn-secondary">Retirer l'approbation</button>
+              }
+              <div class="flex gap-3">
+                <a [href]="api.getClipDownloadUrl(clip()!.id)" target="_blank" class="btn btn-secondary flex-1">
+                  <app-icon name="download" [size]="16" /> Télécharger
+                </a>
+                <button (click)="deleteClip()" class="btn btn-danger flex-1">
+                  <app-icon name="trash" [size]="16" /> Supprimer
                 </button>
-                <span class="text-xs text-gray-600">Repasse le clip en attente (retire l'approbation)</span>
               </div>
-            }
-            <div class="flex flex-col gap-1">
-              <a [href]="api.getClipDownloadUrl(clip()!.id)" target="_blank"
-                class="px-5 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors text-center">
-                Télécharger
-              </a>
-              <span class="text-xs text-gray-600">Télécharge le fichier MP4</span>
-            </div>
-            <div class="flex flex-col gap-1">
-              <button (click)="deleteClip()"
-                class="px-5 py-2 bg-red-900 hover:bg-red-700 text-red-300 rounded-lg text-sm font-medium transition-colors">
-                Supprimer
-              </button>
-              <span class="text-xs text-gray-600">Supprime ce clip définitivement</span>
-            </div>
-          </div>
-
-          @if (successMsg()) {
-            <p class="text-green-400 text-sm mt-3">{{ successMsg() }}</p>
-          }
+              @if (successMsg()) { <p class="text-accent text-sm" role="status">{{ successMsg() }}</p> }
+            </section>
+          </aside>
         </div>
       }
-    </div>
+    </main>
   `,
 })
 export class ClipReviewPage implements OnInit {
+  readonly statutClipAffiche = statutClip;
+
   @ViewChild('videoEl') videoEl!: ElementRef<HTMLVideoElement>;
 
   protected readonly api = inject(ApiService);
@@ -431,7 +349,7 @@ export class ClipReviewPage implements OnInit {
       next: (updated) => {
         this.clip.set(updated);
         this.recutting.set(false);
-        this.successMsg.set('Recut terminé ✓');
+        this.successMsg.set('Clip recoupé.');
         setTimeout(() => this.successMsg.set(null), 3000);
         setTimeout(() => {
           const video = this.videoEl?.nativeElement;
@@ -473,7 +391,7 @@ export class ClipReviewPage implements OnInit {
   approve() {
     this.saving.set(true);
     this.api.updateClip(this.clip()!.id, { status: 'APPROVED' }).subscribe({
-      next: (c) => { this.clip.set(c); this.saving.set(false); this.successMsg.set('Approuvé ✓'); setTimeout(() => this.successMsg.set(null), 2000); },
+      next: (c) => { this.clip.set(c); this.saving.set(false); this.successMsg.set('Clip approuvé.'); setTimeout(() => this.successMsg.set(null), 2000); },
       error: () => this.saving.set(false),
     });
   }
@@ -496,21 +414,11 @@ export class ClipReviewPage implements OnInit {
       next: (updated) => {
         this.clip.set({ ...c, ...updated, thumbnailUrl: this.api.getClipThumbnailUrl(c.id) + '?t=' + Date.now() });
         this.uploadingThumb.set(false);
-        this.thumbMsg.set('Miniature mise à jour ✓');
+        this.thumbMsg.set('Miniature mise à jour.');
         setTimeout(() => this.thumbMsg.set(''), 3000);
       },
       error: () => this.uploadingThumb.set(false),
     });
   }
 
-  statusClass(status: string): string {
-    const map: Record<string, string> = {
-      PENDING: 'bg-gray-700 text-gray-300',
-      APPROVED: 'bg-green-800 text-green-300',
-      UPLOADING: 'bg-blue-800 text-blue-300',
-      UPLOADED: 'bg-green-600 text-white',
-      FAILED: 'bg-red-800 text-red-300',
-    };
-    return map[status] ?? 'bg-gray-700 text-gray-300';
-  }
 }
