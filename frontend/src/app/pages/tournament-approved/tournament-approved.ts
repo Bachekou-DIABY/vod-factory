@@ -35,8 +35,12 @@ import { ApiService, Clip, Tournament, YoutubeAccount } from '../../services/api
                   {{ tournament()?.youtubePlaylistId ? dejaEnLigne() + ' vidéo(s) en ligne' : 'Créée au premier envoi' }}
                 </span>
               </div>
-              @if (tournament()?.youtubePlaylistId) {
-                <button (click)="renommage.set(!renommage())" class="btn btn-secondary btn-sm ml-2" [attr.aria-expanded]="renommage()">Renommer</button>
+              @if (tournament()?.youtubePlaylistId; as playlistId) {
+                <a [href]="'https://www.youtube.com/playlist?list=' + playlistId" target="_blank" rel="noopener"
+                  class="btn btn-secondary btn-sm ml-2">
+                  <app-icon name="external" [size]="14" /> Ouvrir
+                </a>
+                <button (click)="renommage.set(!renommage())" class="btn btn-secondary btn-sm" [attr.aria-expanded]="renommage()">Renommer</button>
                 <button (click)="synchroniserPlaylist()" [disabled]="syncEnCours()" class="btn btn-secondary btn-sm"
                   title="Ajoute à la playlist les vidéos en ligne qui n'y sont pas, sans rien renvoyer">
                   <app-icon name="refresh" [size]="14" /> {{ syncEnCours() ? '…' : 'Synchroniser' }}

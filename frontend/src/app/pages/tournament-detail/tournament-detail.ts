@@ -25,6 +25,11 @@ import { statutVod } from '../../components/vod-status';
           <a [routerLink]="['/tournaments', slug, 'approved']" class="btn btn-secondary">
             <app-icon name="list" [size]="16" /> Clips approuvés
           </a>
+          @if (tournament()?.youtubePlaylistId; as playlistId) {
+            <a [href]="'https://www.youtube.com/playlist?list=' + playlistId" target="_blank" rel="noopener" class="btn btn-secondary">
+              <app-icon name="youtube" [size]="16" /> Playlist
+            </a>
+          }
           <button (click)="showAddForm.set(!showAddForm())" class="btn btn-primary" [attr.aria-expanded]="showAddForm()">
             <app-icon name="plus" [size]="16" /> Importer une VOD
           </button>
