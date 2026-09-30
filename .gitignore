@@ -68,3 +68,6 @@ __screenshots__/
 *.mkv
 *.webm
 *.part
+
+# Etat du deploiement automatique (scripts/auto-deploy.sh)
+.auto-deploy-state

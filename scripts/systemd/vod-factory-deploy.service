@@ -1,0 +1,12 @@
+[Unit]
+Description=VOD Factory : déploie le dernier commit de main si la CI est verte
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/vod-factory
+ExecStart=/home/ubuntu/vod-factory/scripts/auto-deploy.sh
+# Un rebuild complet prend une vingtaine de minutes sur les 2 cœurs ARM.
+TimeoutStartSec=45min
