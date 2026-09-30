@@ -174,7 +174,7 @@ export class AlignVodSetsUseCase {
       };
 
       const raffine = refineAlignment(signal, sets, candidates, alignerOptions);
-      let aligned = raffine.aligned;
+      const aligned = raffine.aligned;
       candidates = raffine.candidates;
 
       if (raffine.recuperees > 0) {

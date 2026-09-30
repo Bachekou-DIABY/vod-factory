@@ -98,7 +98,7 @@ export function splitToMatchCount(
 ): GameCandidate[] {
   if (games.length === 0 || games.length >= cible) return games;
 
-  let resultat = [...games];
+  const resultat = [...games];
 
   while (resultat.length < cible) {
     let indexPlusLongue = -1;
