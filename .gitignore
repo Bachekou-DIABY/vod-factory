@@ -71,3 +71,4 @@ __screenshots__/
 
 # Etat du deploiement automatique (scripts/auto-deploy.sh)
 .auto-deploy-state
+.auto-deploy-pending

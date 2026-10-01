@@ -24,6 +24,8 @@ main() {
   local branche="main"
   local env_file=".env.production"
   local etat=".auto-deploy-state"
+  # Présent entre la fin du build et le redémarrage des conteneurs.
+  local en_attente=".auto-deploy-pending"
   # Au-delà, un clip resté en UPLOADING est une trace d'un envoi interrompu,
   # pas un envoi en cours : il ne doit pas bloquer les déploiements à jamais.
   local envoi_max_minutes=60
@@ -37,7 +39,6 @@ main() {
   local local_sha distant_sha
   local_sha=$(git rev-parse HEAD)
   distant_sha=$(git rev-parse "origin/$branche")
-  [ "$local_sha" = "$distant_sha" ] && return 0
 
   # N'écrit dans le journal que quand la situation change, pas toutes les 5 min.
   signaler() {
@@ -48,6 +49,28 @@ main() {
     fi
   }
 
+  if [ "$local_sha" != "$distant_sha" ]; then
+    integrer || return $?
+  fi
+
+  # Le build prend plusieurs minutes, pendant lesquelles un travail peut
+  # démarrer : le repos se vérifie donc une seconde fois juste avant de
+  # redémarrer les conteneurs, et la mise en ligne attend s'il le faut.
+  [ -f "$en_attente" ] || return 0
+  local occupe
+  occupe=$(travail_en_cours "$env_file" "$envoi_max_minutes")
+  if [ -n "$occupe" ]; then
+    signaler occupe-apres-build "image construite, mise en ligne reportée ($occupe)"
+    return 0
+  fi
+  ./deploy.sh
+  rm -f "$en_attente"
+  signaler deploye "déployé"
+}
+
+# Tire les nouveaux commits et construit les images, sans rien redémarrer.
+# Retourne 0 sans rien faire tant qu'un commit n'est pas déployable.
+integrer() {
   if ! git merge-base --is-ancestor HEAD "origin/$branche"; then
     signaler divergent "le serveur a des commits absents de GitHub, déploiement manuel requis"
     return 0
@@ -74,6 +97,8 @@ else: print(runs[0]["conclusion"])
     *) signaler ci-rouge "CI en échec ($ci), commit non déployé"; return 0 ;;
   esac
 
+  # Le build lui-même ne gêne aucun travail, mais il prend les deux cœurs :
+  # inutile de ralentir un téléchargement ou une découpe en cours.
   local occupe
   occupe=$(travail_en_cours "$env_file" "$envoi_max_minutes")
   if [ -n "$occupe" ]; then
@@ -84,19 +109,18 @@ else: print(runs[0]["conclusion"])
   local fichiers
   fichiers=$(git diff --name-only HEAD "origin/$branche")
 
-  echo "${distant_sha:0:7} : déploiement de $(git log --oneline HEAD.."origin/$branche" | wc -l) commit(s)"
+  echo "${distant_sha:0:7} : intégration de $(git log --oneline HEAD.."origin/$branche" | wc -l) commit(s)"
   git merge --quiet --ff-only "origin/$branche"
 
-  if echo "$fichiers" | grep -qvE '(\.md$|\.spec\.ts$|/__fixtures__/|^\.github/|^scripts/)'; then
-    if ./deploy.sh --build; then
-      signaler deploye "déployé"
-    else
-      signaler build-rate "échec du build, l'ancienne version tourne toujours"
-      return 1
-    fi
-  else
+  if ! echo "$fichiers" | grep -qvE '(\.md$|\.spec\.ts$|/__fixtures__/|^\.github/|^scripts/)'; then
     signaler tire "rien à reconstruire (doc, tests ou scripts), code tiré seulement"
+    return 0
   fi
+  if ! docker compose -f docker-compose.production.yml --env-file "$env_file" build; then
+    signaler build-rate "échec du build, l'ancienne version tourne toujours"
+    return 1
+  fi
+  touch "$en_attente"
 }
 
 # Affiche ce qui tourne encore, ou rien si le serveur est au repos.
