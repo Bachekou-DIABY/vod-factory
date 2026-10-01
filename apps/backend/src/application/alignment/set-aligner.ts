@@ -20,6 +20,7 @@ import {
   ExpectedSet,
   GameCandidate,
 } from '../../domain/alignment/alignment.types';
+import { DELAI_SAISIE_MAX_SECONDS, scoreSaisiApresCoup } from './api-times';
 
 export interface AlignerOptions {
   /** Décalage à appliquer aux temps API, issu de l'estimateur de biais. */
@@ -138,7 +139,11 @@ function runCost(
 
   // 2. Écart aux timestamps API recalés, plafonné : un TO qui oublie de
   // reporter un set ne doit pas faire exploser le coût de tout l'alignement.
-  const expectedStart = toVodSeconds(set.apiStartUnix, opts);
+  // Score saisi après coup : l'heure Start.gg n'est qu'une borne. Le set
+  // s'est fini avant, jusqu'à DELAI_SAISIE_MAX_SECONDS avant sans pénalité.
+  const saisie = scoreSaisiApresCoup(set);
+
+  const expectedStart = saisie ? null : toVodSeconds(set.apiStartUnix, opts);
   if (expectedStart !== null) {
     cost += timeCost(
       candidates[from].startSeconds,
@@ -150,12 +155,15 @@ function runCost(
 
   const expectedEnd = toVodSeconds(set.apiEndUnix, opts);
   if (expectedEnd !== null) {
-    cost += timeCost(
-      candidates[to - 1].endSeconds,
-      expectedEnd,
-      opts.weightTimeEnd,
-      opts,
-    );
+    const actualEnd = candidates[to - 1].endSeconds;
+    cost += saisie
+      ? timeCost(
+          Math.max(actualEnd, Math.min(expectedEnd, actualEnd + DELAI_SAISIE_MAX_SECONDS)),
+          expectedEnd,
+          opts.weightTimeEnd,
+          opts,
+        )
+      : timeCost(actualEnd, expectedEnd, opts.weightTimeEnd, opts);
   }
 
   // 3. Les games d'un même set s'enchaînent. Un trou de dix minutes entre deux
@@ -277,8 +285,11 @@ function scoreConfidence(
     countScore = 0.7;
   }
 
-  // Accord avec les temps API recalés.
-  const expectedStart = toVodSeconds(set.apiStartUnix, opts);
+  // Accord avec les temps API recalés. Un score saisi après coup ne dit rien
+  // du début : le score reste neutre.
+  const expectedStart = scoreSaisiApresCoup(set)
+    ? null
+    : toVodSeconds(set.apiStartUnix, opts);
   let timeScore = 0.5;
   if (expectedStart !== null) {
     const error = Math.abs(games[0].startSeconds - expectedStart);

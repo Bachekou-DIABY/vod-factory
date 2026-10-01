@@ -12,6 +12,7 @@
  */
 
 import { ExpectedSet, GameCandidate } from '../../domain/alignment/alignment.types';
+import { scoreSaisiApresCoup } from './api-times';
 
 export interface OffsetEstimate {
   /** Secondes à ajouter aux temps API convertis pour tomber sur la VOD. */
@@ -73,7 +74,13 @@ export function estimateBias(
   const n = Math.max(1, Math.floor(durationSeconds));
 
   const timedSets = sets.filter(
-    (s) => s.apiStartUnix != null && s.apiEndUnix != null && s.gameCount !== 0,
+    // Un score saisi après coup ne donne pas l'heure du set : il fausserait
+    // le décalage estimé.
+    (s) =>
+      s.apiStartUnix != null &&
+      s.apiEndUnix != null &&
+      s.gameCount !== 0 &&
+      !scoreSaisiApresCoup(s),
   );
 
   if (
