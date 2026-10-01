@@ -10,8 +10,8 @@ import { ApiService, StorageInfo, YoutubeAccount } from '../services/api.service
     <header class="h-16 px-6 lg:px-10 flex items-center gap-10 bg-gray-900 border-b border-gray-800">
       <a routerLink="/" class="flex items-center gap-2.5 shrink-0" aria-label="VOD·Factory, accueil">
         <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
-          <rect x="2" y="7" width="26" height="16" rx="3" stroke="#42F2F5" stroke-width="2" />
-          <path d="M12 7v16M18 7v16" stroke="#42F2F5" stroke-width="2" stroke-dasharray="3 2" />
+          <rect x="2" y="7" width="26" height="16" rx="3" stroke="#3BCEB1" stroke-width="2" />
+          <path d="M12 7v16M18 7v16" stroke="#3BCEB1" stroke-width="2" stroke-dasharray="3 2" />
         </svg>
         <span class="text-lg font-bold tracking-wide">VOD<span class="text-accent">·</span>FACTORY</span>
       </a>
