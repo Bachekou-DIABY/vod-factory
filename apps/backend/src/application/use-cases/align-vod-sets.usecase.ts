@@ -187,6 +187,11 @@ export class AlignVodSetsUseCase {
           `${raffine.decoupees} game(s) recollee(s) separee(s) d apres le score Start.gg`,
         );
       }
+      if (raffine.configsEcartees > 0) {
+        this.logger.log(
+          `${raffine.configsEcartees} ecran(s) de configuration des touches ecarte(s) en tete de set`,
+        );
+      }
       if (raffine.recales > 0) {
         this.logger.log(
           `${raffine.recales} debut(s) de clip recale(s) pour ne pas ouvrir sur une image morte`,

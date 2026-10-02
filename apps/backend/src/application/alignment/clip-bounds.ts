@@ -15,7 +15,10 @@
  * la noirceur d'un habillage n'a aucune valeur universelle.
  */
 
-import { AlignedSet, FrameSignal } from '../../domain/alignment/alignment.types';
+import {
+  AlignedSet,
+  FrameSignal,
+} from '../../domain/alignment/alignment.types';
 
 export interface ClipBoundsOptions {
   /** Recul maximal avant la première game, en secondes. */
@@ -49,7 +52,10 @@ export const DEFAULT_CLIP_BOUNDS_OPTIONS: ClipBoundsOptions = {
  * du signal est de l'intermission, et la médiane globale (0,251) est quatre
  * fois celle mesurée en jeu (0,059). Calibrer dessus ne détecterait plus rien.
  */
-export function inGameDarkness(signal: FrameSignal, aligned: AlignedSet[]): number {
+export function inGameDarkness(
+  signal: FrameSignal,
+  aligned: AlignedSet[],
+): number {
   const rate = signal.sampleRate > 0 ? signal.sampleRate : 1;
   const toIndex = (s: number) => Math.round((s - signal.startSeconds) * rate);
 
@@ -191,4 +197,58 @@ export function clampToNextClip(aligned: AlignedSet[]): AlignedSet[] {
   }
 
   return resultat;
+}
+
+/**
+ * Durée sous laquelle un candidat en tête de set ne peut pas être une game.
+ *
+ * Une game d'Ultimate dure rarement moins de deux minutes ; l'écran de
+ * configuration des touches, qui affiche parfois assez d'interface pour passer
+ * le détecteur, dure une minute environ.
+ */
+export const MAX_SETUP_SCREEN_SECONDS = 90;
+
+/**
+ * Écarte un écran de configuration pris pour la première game d'un set.
+ *
+ * Ne s'applique que si le score Start.gg confirme qu'il y a exactement une
+ * game de trop : une game courte légitime, sur un set au compte juste, n'est
+ * jamais touchée. Vu sur La Suite #9 : 64 s de réglage des touches, deux
+ * minutes avant la première vraie game.
+ */
+export function dropLeadingSetupScreen(aligned: AlignedSet[]): {
+  aligned: AlignedSet[];
+  ecartes: number;
+} {
+  let ecartes = 0;
+
+  const resultat = aligned.map((entry) => {
+    const attendu = entry.set.gameCount;
+    if (attendu === null || attendu === 0) return entry;
+    if (entry.games.length !== attendu + 1) return entry;
+
+    const premiere = entry.games[0];
+    if (
+      premiere.endSeconds - premiere.startSeconds >=
+      MAX_SETUP_SCREEN_SECONDS
+    ) {
+      return entry;
+    }
+
+    ecartes++;
+    const games = entry.games.slice(1);
+    return {
+      ...entry,
+      games,
+      // Le compte est désormais juste : plus rien de partiel à signaler.
+      source: 'video' as const,
+      warnings: entry.warnings.filter((w) => !w.startsWith('Score Start.gg')),
+      startSeconds: Math.max(
+        0,
+        games[0].startSeconds - DEFAULT_CLIP_BOUNDS_OPTIONS.preRollSeconds,
+      ),
+    };
+  });
+
+  return { aligned: resultat, ecartes };
 }

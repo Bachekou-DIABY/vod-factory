@@ -21,6 +21,7 @@ import { splitToMatchCount } from './game-splitter';
 import {
   DEFAULT_CLIP_BOUNDS_OPTIONS,
   clampToNextClip,
+  dropLeadingSetupScreen,
   trimDeadPreRoll,
 } from './clip-bounds';
 
@@ -39,6 +40,8 @@ export interface RefineResult {
   decoupees: number;
   /** Debuts de clip recales pour ne pas ouvrir sur une image morte. */
   recales: number;
+  /** Ecrans de configuration des touches pris pour une game, puis ecartes. */
+  configsEcartees: number;
 }
 
 function overlapsAny(candidate: GameCandidate, known: GameCandidate[]): boolean {
@@ -156,6 +159,9 @@ export function refineAlignment(
     aligned = alignSets(sets, candidates, options);
   }
 
+  const sansConfig = dropLeadingSetupScreen(aligned);
+  aligned = sansConfig.aligned;
+
   const avant = aligned;
   aligned = trimDeadPreRoll(signal, aligned, {
     ...DEFAULT_CLIP_BOUNDS_OPTIONS,
@@ -166,5 +172,12 @@ export function refineAlignment(
     (a, i) => a.startSeconds !== avant[i].startSeconds,
   ).length;
 
-  return { aligned, candidates, recuperees: extra.length, decoupees, recales };
+  return {
+    aligned,
+    candidates,
+    recuperees: extra.length,
+    decoupees,
+    recales,
+    configsEcartees: sansConfig.ecartes,
+  };
 }

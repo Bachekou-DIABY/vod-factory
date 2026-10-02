@@ -6,6 +6,7 @@ import {
 import {
   DEFAULT_CLIP_BOUNDS_OPTIONS,
   clampToNextClip,
+  dropLeadingSetupScreen,
   inGameDarkness,
   preRollBefore,
   trimDeadPreRoll,
@@ -50,7 +51,9 @@ function alignedSet(games: GameCandidate[], startSeconds: number): AlignedSet {
     confidence: 1,
     warnings: [],
     startSeconds,
-    endSeconds: games.length ? games[games.length - 1].endSeconds + 20 : startSeconds,
+    endSeconds: games.length
+      ? games[games.length - 1].endSeconds + 20
+      : startSeconds,
   };
 }
 
@@ -110,7 +113,10 @@ describe('preRollBefore', () => {
 describe('inGameDarkness', () => {
   it('mesure la noirceur pendant le jeu, pas sur toute la VOD', () => {
     // Les trois quarts du signal sont morts : une médiane globale vaudrait 0.6.
-    const s = signal(1000, [[0, 400], [600, 1000]]);
+    const s = signal(1000, [
+      [0, 400],
+      [600, 1000],
+    ]);
     const aligned = [alignedSet([game(400, 600)], 375)];
 
     expect(inGameDarkness(s, aligned)).toBeCloseTo(0.05, 2);
@@ -187,5 +193,69 @@ describe('clampToNextClip', () => {
     const b = alignedSet([game(100, 300)], 75);
 
     expect(clampToNextClip([vide, b])[0]).toBe(vide);
+  });
+});
+
+describe('dropLeadingSetupScreen', () => {
+  /** Set dont le score annonce `annonce` games, quel que soit le compte détecté. */
+  function setAnnonce(games: GameCandidate[], annonce: number): AlignedSet {
+    const entry = alignedSet(games, games[0].startSeconds - 25);
+    entry.set = {
+      ...entry.set,
+      gameCount: annonce,
+      minGames: annonce,
+      maxGames: annonce,
+    };
+    entry.source = games.length === annonce ? 'video' : 'video-partial';
+    entry.warnings =
+      games.length === annonce
+        ? []
+        : ['Score Start.gg "A 3 - B 1" annonce 4 game(s), 5 détectée(s).'];
+    return entry;
+  }
+
+  it('écarte un passage court en tête quand le score annonce une game de moins', () => {
+    // Cas réel, La Suite #9 : 64 s de configuration des touches avant le set.
+    const entry = setAnnonce(
+      [
+        game(160, 224),
+        game(284, 636),
+        game(686, 886),
+        game(928, 1132),
+        game(1188, 1370),
+      ],
+      4,
+    );
+
+    const { aligned, ecartes } = dropLeadingSetupScreen([entry]);
+
+    expect(ecartes).toBe(1);
+    expect(aligned[0].games).toHaveLength(4);
+    expect(aligned[0].games[0].startSeconds).toBe(284);
+    expect(aligned[0].startSeconds).toBe(
+      284 - DEFAULT_CLIP_BOUNDS_OPTIONS.preRollSeconds,
+    );
+    expect(aligned[0].source).toBe('video');
+    expect(aligned[0].warnings).toEqual([]);
+  });
+
+  it('ne touche jamais un set dont le compte est juste', () => {
+    // Une game de 70 s existe (un stock perdu très vite) : sans game en trop,
+    // rien ne permet de la prendre pour un écran de configuration.
+    const entry = setAnnonce(
+      [game(100, 170), game(220, 420), game(470, 680)],
+      3,
+    );
+
+    expect(dropLeadingSetupScreen([entry]).ecartes).toBe(0);
+  });
+
+  it('garde une première game longue, même avec une game en trop', () => {
+    const entry = setAnnonce(
+      [game(100, 300), game(350, 550), game(600, 800)],
+      2,
+    );
+
+    expect(dropLeadingSetupScreen([entry]).aligned[0].games).toHaveLength(3);
   });
 });

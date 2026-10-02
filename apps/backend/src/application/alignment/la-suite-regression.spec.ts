@@ -1,6 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { ExpectedSet, FrameSignal } from '../../domain/alignment/alignment.types';
+import {
+  ExpectedSet,
+  FrameSignal,
+} from '../../domain/alignment/alignment.types';
 import { DEFAULT_ALIGNER_OPTIONS } from './set-aligner';
 import { DEFAULT_SEGMENTER_OPTIONS, segment } from './segmenter';
 import { refineAlignment } from './refine';
@@ -46,8 +49,12 @@ describe('La Suite #9, chaîne ValEtRégis', () => {
   };
 
   const aligner = () =>
-    refineAlignment(signal, sets, segment(signal, DEFAULT_SEGMENTER_OPTIONS), options)
-      .aligned;
+    refineAlignment(
+      signal,
+      sets,
+      segment(signal, DEFAULT_SEGMENTER_OPTIONS),
+      options,
+    ).aligned;
 
   const trouver = (round: string) =>
     aligner().find((a) => a.set.roundName === round)!;
@@ -60,7 +67,24 @@ describe('La Suite #9, chaîne ValEtRégis', () => {
     const derniere = semi.games[semi.games.length - 1];
 
     expect(semi.games).toHaveLength(5);
-    expect(Math.abs(derniere.endSeconds - (7 * 3600 + 23 * 60 + 45))).toBeLessThanOrEqual(30);
+    expect(
+      Math.abs(derniere.endSeconds - (7 * 3600 + 23 * 60 + 45)),
+    ).toBeLessThanOrEqual(30);
+  });
+
+  it('écarte l écran de configuration des touches pris pour une game', () => {
+    // 64 s de réglage des manettes à 0:02:40, une minute avant la première
+    // vraie game : le set affichait 5 games pour un score en 4.
+    const premier = aligner().find((a) =>
+      a.set.players.startsWith('NES | Shadee'),
+    )!;
+
+    expect(premier.games).toHaveLength(4);
+    expect(premier.source).toBe('video');
+    expect(
+      Math.abs(premier.games[0].startSeconds - (4 * 60 + 44)),
+    ).toBeLessThanOrEqual(10);
+    expect(premier.startSeconds).toBeGreaterThan(4 * 60);
   });
 
   it('garde le Losers Quarter-Final, saisi juste après sa fin', () => {
@@ -73,7 +97,8 @@ describe('La Suite #9, chaîne ValEtRégis', () => {
   it('ne trouve aucune game pour les deux sets joués hors antenne', () => {
     const horsAntenne = aligner().filter(
       (a) =>
-        a.set.players.startsWith('Koopario') || a.set.players.startsWith('Mustinho'),
+        a.set.players.startsWith('Koopario') ||
+        a.set.players.startsWith('Mustinho'),
     );
 
     expect(horsAntenne).toHaveLength(2);
