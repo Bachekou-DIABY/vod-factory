@@ -336,8 +336,9 @@ function normaliser(texte: string): string {
                     @if (a.source === 'api') {
                       <span class="col-span-2 text-xs text-gray-400">Introuvable dans la vidéo</span>
                     } @else {
-                      <button type="button" (click)="seekMainVideo(a.startSeconds)" class="text-left font-mono hover:text-accent" [attr.aria-label]="'Aller au début de ' + a.set.roundName">{{ toHMS(a.startSeconds) }}</button>
-                      <span class="font-mono">{{ toHMS(a.endSeconds) }}</span>
+                      @let b = bornes(a);
+                      <button type="button" (click)="seekMainVideo(b.debut)" class="text-left font-mono hover:text-accent" [attr.aria-label]="'Aller au début de ' + a.set.roundName">{{ toHMS(b.debut) }}</button>
+                      <span class="font-mono">{{ toHMS(b.fin) }}</span>
                     }
                     <span class="flex items-center gap-2.5">
                       <span class="w-14 h-1 bg-gray-700 rounded-full overflow-hidden">
@@ -784,6 +785,24 @@ export class VodDetailPage implements OnInit, OnDestroy {
   });
 
   /** Positions des sets, des orphelins et des heures sur la chronologie, en %. */
+  /** Clip de chaque set, pour afficher ses bornes une fois recoupé. */
+  readonly clipParSet = computed(() => {
+    const parSet = new Map<string, Clip>();
+    for (const c of this.clips()) if (c.setStartGGId) parSet.set(c.setStartGGId, c);
+    return parSet;
+  });
+
+  /**
+   * Bornes affichées d'un set : celles de son clip s'il existe, car une
+   * recoupe modifie le clip mais pas le rapport d'alignement.
+   */
+  bornes(a: AlignmentReport['aligned'][number]): { debut: number; fin: number } {
+    const clip = this.clipParSet().get(a.set.setStartGGId);
+    return clip
+      ? { debut: clip.startSeconds, fin: clip.endSeconds }
+      : { debut: a.startSeconds, fin: a.endSeconds };
+  }
+
   readonly frise = computed(() => {
     const r = this.rapport();
     const d = this.dureeVod();
@@ -794,14 +813,17 @@ export class VodDetailPage implements OnInit, OnDestroy {
     return {
       segments: r.aligned
         .filter((a) => a.source !== 'api')
-        .map((a) => ({
-          cle: a.set.setStartGGId,
-          l: pct(a.startSeconds),
-          w: Math.max(0.2, pct(a.endSeconds) - pct(a.startSeconds)),
-          partiel: a.source === 'video-partial',
-          debut: a.startSeconds,
-          titre: a.set.roundName + ' — ' + a.set.players,
-        })),
+        .map((a) => {
+          const b = this.bornes(a);
+          return {
+            cle: a.set.setStartGGId,
+            l: pct(b.debut),
+            w: Math.max(0.2, pct(b.fin) - pct(b.debut)),
+            partiel: a.source === 'video-partial',
+            debut: b.debut,
+            titre: a.set.roundName + ' — ' + a.set.players,
+          };
+        }),
       orphelins: (r.orphans ?? []).map((o, i) => ({ cle: i, l: pct(o.startSeconds) })),
       heures,
     };
