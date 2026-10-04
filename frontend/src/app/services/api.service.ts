@@ -85,6 +85,8 @@ export interface Clip {
   privacyStatus?: string;
   status: string;
   createdAt: string;
+  /** Chapitres YouTube, une ligne par game ; fournis par la liste des clips approuvés. */
+  chapitres?: string | null;
 }
 
 /** Une game détectée dans la vidéo. */

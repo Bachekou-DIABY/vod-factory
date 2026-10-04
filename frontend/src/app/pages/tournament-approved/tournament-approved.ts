@@ -476,9 +476,12 @@ export class TournamentApprovedPage implements OnInit {
   }
 
   private descriptionParDefaut(clip: Clip): string {
-    return [clip.roundName, clip.players, clip.score ? `Score : ${clip.score}` : '']
+    const entete = [clip.roundName, clip.players, clip.score ? `Score : ${clip.score}` : '']
       .filter(Boolean)
       .join('\n');
+    // Une ligne vide avant les chapitres : YouTube les repère n'importe où
+    // dans la description, mais ils restent lisibles comme un bloc à part.
+    return clip.chapitres ? entete + '\n\n' + clip.chapitres : entete;
   }
 
   confirmerEnvoiClip() {
